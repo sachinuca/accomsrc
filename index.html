@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script>
+        window.onerror = function(message, source, lineno, colno, error) {
+            var errorMsg = message + " at " + source + ":" + lineno + ":" + colno;
+            fetch('/log-error?msg=' + encodeURIComponent(errorMsg));
+            return false;
+        };
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accommodation SRC</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <!-- Firebase SDK (Compat Version for simple integration) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="app.js" defer></script>
+</head>
+<body>
+    <!-- Mobile Simulator Wrapper -->
+    <div class="mobile-frame">
+        <div class="mobile-notch"></div>
+        
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <span class="status-time" id="status-time">09:30</span>
+            <div class="status-icons">
+                <!-- Wifi Icon -->
+                <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 21l-12-12c4.4-4.4 11.6-4.4 16 0l-4 4c-2.2-2.2-5.8-2.2-8 0l8 8z"/></svg>
+                <!-- Battery Icon -->
+                <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M17 5H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2m4 4v6h1v-6h-1z"/></svg>
+            </div>
+        </div>
+
+        <!-- App Container -->
+        <div id="app" class="app-content">
+            
+            <!-- SCREEN 1: HOME DASHBOARD -->
+            <div id="screen-home" class="screen active">
+                <header class="app-header">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button class="btn-icon" id="btn-user-menu-trigger" title="User Settings & Logout" style="background: rgba(255,255,255,0.06); border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; padding: 0;">
+                            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                        </button>
+                        <img src="logo.png" alt="Logo" class="clickable-logo" style="height: 36px; width: 36px; object-fit: contain; cursor: pointer; border-radius: 6px;">
+                        <h1 class="app-title" style="font-size: 16px;">Accommodation SRC</h1>
+                    </div>
+                    <button class="btn-icon" id="btn-room-viz-shortcut" title="Room Visualization">
+                        <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M3 3h8v8H3zm0 10h8v8H3zm10-10h8v8h-8zm0 10h8v8h-8z"/></svg>
+                    </button>
+                </header>
+
+                <div class="screen-body">
+                    <!-- Dashboard Occupant Summary (Frosted Glass Glassmorphism) -->
+                    <div class="dashboard-stats-wrapper frosted-glass">
+                        <div class="stats-wrapper-header">
+                            <span class="stats-wrapper-title">Occupant Summary</span>
+                            <button class="btn-share-stats" id="btn-share-dashboard-summary" title="Share Summary on WhatsApp">
+                                <svg viewBox="0 0 24 24" width="14" height="14" style="vertical-align: middle; margin-right: 4px;"><path fill="currentColor" d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2m.01 1.67c2.2 0 4.26.86 5.82 2.42a8.136 8.136 0 0 1 2.41 5.82c0 4.54-3.7 8.24-8.24 8.24-1.44 0-2.86-.38-4.1-1.09l-.29-.17-3.05.8.82-2.98-.19-.3a8.21 8.21 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.23-8.24m-3.53 4.75c-.19-.43-.4-.44-.58-.45l-.49-.01c-.17 0-.45.06-.68.32-.23.25-.88.86-.88 2.1s.9 2.43 1.02 2.6c.13.17 1.77 2.7 4.29 3.79 2.11.91 2.54.73 3 .68.46-.05 1.48-.6 1.69-1.19.2-.58.2-1.09.14-1.19-.06-.1-.23-.17-.49-.3-.26-.13-1.48-.73-1.71-.81-.23-.08-.4-.13-.56.12-.17.25-.65.81-.8 1-.14.17-.29.19-.55.06-1.12-.56-1.93-1.04-2.69-2.35-.2-.34.2-.32.57-1.06.06-.12.03-.23-.01-.32-.05-.09-.49-1.19-.67-1.63z"/></svg>
+                                Share
+                            </button>
+                        </div>
+                        <div class="dashboard-stats-grid">
+                            <div class="stats-row stats-row-3">
+                                <div class="stat-item" id="btn-stat-total">
+                                    <div class="stat-icon-wrapper color-total">
+                                        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+                                    </div>
+                                    <span class="stat-value" id="stat-total-people">0</span>
+                                    <span class="stat-label">Total</span>
+                                </div>
+                                <div class="stat-item" id="btn-stat-guests">
+                                    <div class="stat-icon-wrapper color-guest">
+                                        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+                                    </div>
+                                    <span class="stat-value" id="stat-total-guests">0</span>
+                                    <span class="stat-label">Guest</span>
+                                </div>
+                                <div class="stat-item" id="btn-stat-sevadharis">
+                                    <div class="stat-icon-wrapper color-seva">
+                                        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                                    </div>
+                                    <span class="stat-value" id="stat-total-sevadharis">0</span>
+                                    <span class="stat-label">Seva</span>
+                                </div>
+                            </div>
+                            <div class="stats-row stats-row-2">
+                                <div class="stat-item big-item" id="btn-stat-niwasis">
+                                    <div class="stat-icon-wrapper color-niwasi">
+                                        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+                                    </div>
+                                    <div class="stat-details">
+                                        <span class="stat-value" id="stat-total-niwasis">0</span>
+                                        <span class="stat-label">Niwasi</span>
+                                    </div>
+                                </div>
+                                <div class="stat-item big-item" id="btn-stat-nbks">
+                                    <div class="stat-icon-wrapper color-nbk">
+                                        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M16.5 12c1.38 0 2.49-1.1 2.49-2.5S17.88 7 16.5 7C15.12 7 14 8.1 14 9.5s1.12 2.5 2.5 2.5zM9 11c1.66 0 2.99-1.3 2.99-3S10.66 5 9 5C7.34 5 6 6.3 6 8s1.34 3 3 3zm7.5 3c-1.83 0-5.5.9-5.5 2.75V19h11v-2.25c0-1.85-3.67-2.75-5.5-2.75zM9 13c-2.33 0-7 1.15-7 3.5V19h7v-2.25c0-.85.34-2.21 1.62-3.15-.81-.39-1.79-.6-2.62-.6z"/></svg>
+                                    </div>
+                                    <div class="stat-details">
+                                        <span class="stat-value" id="stat-total-nbks">0</span>
+                                        <span class="stat-label">Non-BK</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section-title-row">
+                        <h2>Active Programmes</h2>
+                        <button class="btn-primary-sm" id="btn-add-programme-trigger">
+                            <span>+ Add</span>
+                        </button>
+                    </div>
+
+                    <!-- Programmes List -->
+                    <div class="programmes-list" id="programmes-list-container">
+                        <!-- Loaded dynamically -->
+                    </div>
+
+                    <!-- Centre-Wise List Big Button -->
+                    <div class="room-viz-button-container">
+                        <button class="btn-large-gradient" id="btn-go-room-viz">
+                            <svg viewBox="0 0 24 24" width="24" height="24" style="margin-right: 8px;"><path fill="currentColor" d="M4 18h17v-2H4v2zm0-5h17v-2H4v2zm0-7v2h17V6H4z"/></svg>
+                            Centre-Wise Occupant List
+                        </button>
+                    </div>
+
+                    <!-- Sevadhari Details Big Button -->
+                    <div class="room-viz-button-container" style="margin-top: 12px;">
+                        <button class="btn-large-gradient" id="btn-go-sevadhari-details" style="background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%); box-shadow: 0 6px 20px rgba(14, 165, 233, 0.4);">
+                            <svg viewBox="0 0 24 24" width="24" height="24" style="margin-right: 8px;"><path fill="currentColor" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                            Sevadhari Details
+                        </button>
+                    </div>
+
+                    <!-- Collapsible Past Programmes Section -->
+                    <div class="dashboard-summary-card" id="past-programmes-card" style="margin-top: 20px;">
+                        <div class="dashboard-summary-header" id="past-programmes-toggle">
+                            <h3 style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; width: 100%; cursor: pointer; margin: 0;">
+                                <span>Past Programmes (<span id="past-programmes-count">0</span>)</span>
+                                <span class="summary-arrow-icon">▼</span>
+                            </h3>
+                        </div>
+                        <div class="dashboard-summary-content hidden" id="past-programmes-content">
+                            <div class="programmes-list" id="past-programmes-list-container" style="margin-bottom: 0;">
+                                <!-- Past programmes loaded dynamically -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Developer credit footer -->
+                    <div style="text-align: center; margin-top: 24px; margin-bottom: 10px; font-size: 10px; color: var(--text-muted); font-family: monospace; letter-spacing: 0.5px; opacity: 0.7;">
+                        developer - BK Sachin Uchana
+                    </div>
+                </div>
+            </div>
+
+            <!-- SCREEN 2: CENTRE-WISE LIST -->
+            <div id="screen-room-viz" class="screen">
+                <header class="app-header">
+                    <button class="btn-back" id="btn-back-from-room-viz">
+                        <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+                    </button>
+                    <div style="display: flex; align-items: center; gap: 8px; flex: 1; margin-left: 8px;">
+                        <img src="logo.png" alt="Logo" class="clickable-logo" style="height: 36px; width: 36px; object-fit: contain; cursor: pointer; border-radius: 4px;">
+                        <h1 class="app-title" style="font-size: 17px;">Centre Occupants</h1>
+                    </div>
+                    <div style="width: 24px;"></div>
+                </header>
+
+                <div class="screen-body" style="padding-bottom: 80px;">
+                    <div id="centre-wise-list-container" class="programmes-list">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- SCREEN 7: ROOM MAP VISUALIZATION -->
+            <div id="screen-room-map" class="screen">
+                <header class="app-header">
+                    <button class="btn-back" id="btn-back-from-room-map">
+                        <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+                    </button>
+                    <div style="display: flex; align-items: center; gap: 8px; flex: 1; margin-left: 8px;">
+                        <img src="logo.png" alt="Logo" class="clickable-logo" style="height: 36px; width: 36px; object-fit: contain; cursor: pointer; border-radius: 4px;">
+                        <h1 class="app-title" style="font-size: 17px;">Room Visualization</h1>
+                    </div>
+                    <div style="width: 24px;"></div>
+                </header>
+
+                <div class="screen-body" style="padding-bottom: 80px;">
+                    <!-- Legend -->
+                    <div class="viz-legend" style="margin-top: 5px; margin-bottom: 10px;">
+                        <div class="legend-item"><span class="legend-dot color-empty"></span><span>Empty</span></div>
+                        <div class="legend-item"><span class="legend-dot color-pink"></span><span>Female</span></div>
+                        <div class="legend-item"><span class="legend-dot color-blue"></span><span>Male</span></div>
+                        <div class="legend-item"><span class="legend-dot color-red"></span><span>Unmaintained</span></div>
+                    </div>
+
+                    <!-- Floor Selection -->
+                    <div class="floor-selector-container">
+                        <div class="floor-tabs" id="viz-floor-tabs">
+                            <button class="floor-tab active" data-floor="2">2nd</button>
+                            <button class="floor-tab" data-floor="3">3rd</button>
+                            <button class="floor-tab" data-floor="4">4th</button>
+                            <button class="floor-tab" data-floor="5">5th</button>
+                            <button class="floor-tab" data-floor="D">Driver</button>
+                        </div>
+                    </div>
+
+                    <!-- Block Toggle -->
+                    <div class="block-selector-container" id="viz-block-selector-container">
+                        <div class="block-toggle-buttons">
+                            <button class="block-btn active" id="btn-viz-block-a" data-block="A">A Block</button>
+                            <button class="block-btn" id="btn-viz-block-b" data-block="B">B Block</button>
+                        </div>
+                    </div>
+
+                    <!-- Room Grid Layout -->
+                    <div class="room-map-grid">
+                        <div class="grid-column">
+                            <h4 class="column-title">Left Side (Odd)</h4>
+                            <div class="room-list-column" id="viz-rooms-left">
+                                <!-- Loaded dynamically -->
+                            </div>
+                        </div>
+                        <div class="grid-column">
+                            <h4 class="column-title">Right Side (Even)</h4>
+                            <div class="room-list-column" id="viz-rooms-right">
+                                <!-- Loaded dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SCREEN 3: REGISTRATION -->
+            <div id="screen-register" class="screen">
+                <header class="app-header">
+                    <button class="btn-back" id="btn-back-from-register">
+                        <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+                    </button>
+                    <div style="display: flex; align-items: center; gap: 8px; flex: 1; margin-left: 8px;">
+                        <img src="logo.png" alt="Logo" class="clickable-logo" style="height: 36px; width: 36px; object-fit: contain; cursor: pointer; border-radius: 4px;">
+                        <h1 class="app-title" id="register-screen-title" style="font-size: 17px;">Register Programme</h1>
+                    </div>
+                    <div style="width: 24px;"></div>
+                </header>
+
+                <div class="screen-body" style="padding-bottom: 80px;">
+                    <!-- Centre Name -->
+                    <div class="form-group">
+                        <label class="form-label" for="reg-centre-name">Centre Name</label>
+                        <input type="text" id="reg-centre-name" class="form-input" placeholder="Enter Centre Name (e.g. Delhi, Mumbai)">
+                    </div>
+
+                    <!-- Centre Contact Phone -->
+                    <div class="form-group" id="group-centre-phone">
+                        <label class="form-label" for="reg-centre-phone">Contact Phone Number</label>
+                        <input type="tel" id="reg-centre-phone" class="form-input" placeholder="Enter Contact Phone Number">
+                    </div>
+
+                    <!-- Departure Date (Conditional) -->
+                    <div class="form-group hidden" id="group-departure-date">
+                        <label class="form-label" for="reg-departure-date">Departure Date <span style="color: var(--accent-red); font-weight: bold;">*</span></label>
+                        <input type="date" id="reg-departure-date" class="form-input">
+                    </div>
+
+                    <!-- Segmented Controls / Option Toggles -->
+                    <div class="form-group">
+                        <label class="form-label">Registration Mode</label>
+                        <div class="segmented-control" id="toggle-group-individual">
+                            <button class="segment-btn active" data-value="group">Group</button>
+                            <button class="segment-btn" data-value="individual">Individual</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Category</label>
+                        <div class="segmented-control" id="toggle-bk-nbk">
+                            <button class="segment-btn active" data-value="bk">BK</button>
+                            <button class="segment-btn" data-value="nbk">Non-BK (NBK)</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Type</label>
+                        <div class="segmented-control" id="toggle-guest-sevadhari">
+                            <button class="segment-btn active" data-value="guest">Guest</button>
+                            <button class="segment-btn" data-value="sevadhari">Sevadhari</button>
+                        </div>
+                    </div>
+
+                    <hr class="form-divider">
+
+                    <!-- GROUP REGISTRATION INPUTS -->
+                    <div id="group-registration-inputs">
+                        <!-- Group BK Section -->
+                        <div id="group-bk-inputs">
+                            <div class="box-container female-box">
+                                <h3 class="box-title">Females Category</h3>
+                                
+                                <div class="counter-row">
+                                    <span>Mata</span>
+                                    <div class="counter-controls">
+                                        <button class="counter-btn minus" data-type="mata">-</button>
+                                        <span class="counter-val" id="count-mata">0</span>
+                                        <button class="counter-btn plus" data-type="mata">+</button>
+                                    </div>
+                                </div>
+
+                                <div class="counter-row">
+                                    <span>Kumari</span>
+                                    <div class="counter-controls">
+                                        <button class="counter-btn minus" data-type="kumari">-</button>
+                                        <span class="counter-val" id="count-kumari">0</span>
+                                        <button class="counter-btn plus" data-type="kumari">+</button>
+                                    </div>
+                                </div>
+
+                                <div class="counter-row hidden" id="row-bk-teacher">
+                                    <span>BK Teacher</span>
+                                    <div class="counter-controls">
+                                        <button class="counter-btn minus" data-type="teacher">-</button>
+                                        <span class="counter-val" id="count-teacher">0</span>
+                                        <button class="counter-btn plus" data-type="teacher">+</button>
+                                    </div>
+                                </div>
+
+                                <div class="counter-row">
+                                    <span>Children</span>
+                                    <div class="counter-controls">
+                                        <button class="counter-btn minus" data-type="children">-</button>
+                                        <span class="counter-val" id="count-children">0</span>
+                                        <button class="counter-btn plus" data-type="children">+</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="box-container male-box">
+                                <h3 class="box-title">Males Category</h3>
+                                
+                                <div class="counter-row">
+                                    <span>Adhar Kumar</span>
+                                    <div class="counter-controls">
+                                        <button class="counter-btn minus" data-type="adhar_kumar">-</button>
+                                        <span class="counter-val" id="count-adhar_kumar">0</span>
+                                        <button class="counter-btn plus" data-type="adhar_kumar">+</button>
+                                    </div>
+                                </div>
+
+                                <div class="counter-row">
+                                    <span>Kumar</span>
+                                    <div class="counter-controls">
+                                        <button class="counter-btn minus" data-type="kumar">-</button>
+                                        <span class="counter-val" id="count-kumar">0</span>
+                                        <button class="counter-btn plus" data-type="kumar">+</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Group NBK Section -->
+                        <div id="group-nbk-inputs" class="hidden">
+                            <div class="box-container nbk-box">
+                                <h3 class="box-title">Non-BK Participants</h3>
+                                
+                                <div class="counter-row" id="row-nbk-female">
+                                    <span>Female</span>
+                                    <div class="counter-controls">
+                                        <button class="counter-btn minus" data-type="nbk_female">-</button>
+                                        <span class="counter-val" id="count-nbk-female">0</span>
+                                        <button class="counter-btn plus" data-type="nbk_female">+</button>
+                                    </div>
+                                </div>
+
+                                <div class="counter-row" id="row-nbk-male">
+                                    <span>Male</span>
+                                    <div class="counter-controls">
+                                        <button class="counter-btn minus" data-type="nbk_male">-</button>
+                                        <span class="counter-val" id="count-nbk-male">0</span>
+                                        <button class="counter-btn plus" data-type="nbk_male">+</button>
+                                    </div>
+                                </div>
+
+                                <div class="counter-row" id="row-nbk-children">
+                                    <span>Children</span>
+                                    <div class="counter-controls">
+                                        <button class="counter-btn minus" data-type="nbk_children">-</button>
+                                        <span class="counter-val" id="count-nbk-children">0</span>
+                                        <button class="counter-btn plus" data-type="nbk_children">+</button>
+                                    </div>
+                                </div>
+
+                                <div class="counter-row hidden" id="row-nbk-driver">
+                                    <span>Driver</span>
+                                    <div class="counter-controls">
+                                        <button class="counter-btn minus" data-type="nbk_driver">-</button>
+                                        <span class="counter-val" id="count-nbk-driver">0</span>
+                                        <button class="counter-btn plus" data-type="nbk_driver">+</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- INDIVIDUAL REGISTRATION INPUTS -->
+                    <div id="individual-registration-inputs" class="hidden">
+                        <div class="box-container">
+                            <div class="box-header-row">
+                                <h3 class="box-title">Registered Persons (<span id="indiv-count">0</span>/10)</h3>
+                                <button class="btn-primary-sm" id="btn-add-indiv-row">Add Person</button>
+                            </div>
+                            
+                            <div class="individual-list" id="individual-list-container">
+                                <!-- Person forms added dynamically -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Bar -->
+                    <div class="bottom-action-bar">
+                        <button class="btn-large-gradient" id="btn-proceed-allotment">Allot Room</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SCREEN 4: RUHANI SEVA -->
+            <div id="screen-seva" class="screen">
+                <header class="app-header">
+                    <button class="btn-back" id="btn-back-from-seva">
+                        <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+                    </button>
+                    <div style="display: flex; align-items: center; gap: 8px; flex: 1; margin-left: 8px;">
+                        <img src="logo.png" alt="Logo" class="clickable-logo" style="height: 36px; width: 36px; object-fit: contain; cursor: pointer; border-radius: 4px;">
+                        <h1 class="app-title" style="font-size: 17px;">Ruhani Seva Allotment</h1>
+                    </div>
+                    <div style="width: 24px;"></div>
+                </header>
+
+                <div class="screen-body" style="padding-bottom: 80px;">
+                    <div class="instruction-banner">
+                        Select persons from below, choose a department, and click <strong>Allot Seva</strong>.
+                    </div>
+
+                    <!-- Department Selector Box -->
+                    <div class="box-container" style="margin-bottom: 20px;">
+                        <h3 class="box-title">Seva Details</h3>
+                        <div class="form-group">
+                            <label class="form-label" for="seva-dept-select">Select Seva Department</label>
+                            <select id="seva-dept-select" class="form-select">
+                                <option value="kitchen">Kitchen</option>
+                                <option value="kitchen toli">Kitchen Toli</option>
+                                <option value="accomodation">Accommodation</option>
+                                <option value="gaushala">Gaushala</option>
+                                <option value="security">Security</option>
+                                <option value="dining">Dining</option>
+                                <option value="vip dining">VIP Dining</option>
+                                <option value="independent">Independent</option>
+                                <option value="vegetable department">Vegetable Department</option>
+                                <option value="yogik kheti">Yogik Kheti</option>
+                                <option value="garden">Garden</option>
+                                <option value="hall">Hall</option>
+                                <option value="tea-milk">Tea-Milk</option>
+                            </select>
+                        </div>
+                        <button class="btn-secondary" id="btn-allot-seva-action" style="width: 100%;">Allot Seva</button>
+                    </div>
+
+                    <!-- Persons List for Seva Selection -->
+                    <div class="box-container">
+                        <h3 class="box-title">Select Persons</h3>
+                        <div class="seva-persons-list" id="seva-persons-list-container">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Action Bar -->
+                    <div class="bottom-action-bar flex-row">
+                        <button class="btn-large-gradient" id="btn-proceed-from-seva-to-allotment" style="width: 100%;">Proceed to Room Allotment</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SCREEN 5: ROOM ALLOTMENT MAP -->
+            <div id="screen-allotment" class="screen">
+                <header class="app-header">
+                    <button class="btn-back" id="btn-back-from-allotment">
+                        <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+                    </button>
+                    <div style="display: flex; align-items: center; gap: 8px; flex: 1; margin-left: 8px;">
+                        <img src="logo.png" alt="Logo" class="clickable-logo" style="height: 36px; width: 36px; object-fit: contain; cursor: pointer; border-radius: 4px;">
+                        <h1 class="app-title" style="font-size: 17px;">Room Allotment</h1>
+                    </div>
+                    <div style="width: 24px;"></div>
+                </header>
+
+                <div class="screen-body" style="padding-bottom: 150px;">
+                    <!-- Top Summary Box -->
+                    <div class="box-container summary-allotment-box">
+                        <h3 class="box-title">Registered Persons (To Allot)</h3>
+                        <div class="allotment-counts-summary" id="allotment-counts-summary-container">
+                            <!-- Populated dynamically, e.g., Mata: 5 (Green check/Pending) -->
+                        </div>
+                        
+                        <!-- Select Allotment Target Checklist -->
+                        <div class="allotment-gender-picker">
+                            <label class="form-label" style="font-size: 13px; opacity: 0.8; margin-top: 10px;">Select people to place in room:</label>
+                            <div class="gender-checkboxes-row" id="allotment-checkbox-row">
+                                <!-- Populated dynamically based on registration type (e.g. Mata, Kumari, Adhar Kumar...) -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Map Legend -->
+                    <div class="viz-legend" style="margin-top: 5px; margin-bottom: 10px;">
+                        <div class="legend-item"><span class="legend-dot color-empty"></span><span>Empty</span></div>
+                        <div class="legend-item"><span class="legend-dot color-pink"></span><span>Female</span></div>
+                        <div class="legend-item"><span class="legend-dot color-blue"></span><span>Male</span></div>
+                        <div class="legend-item"><span class="legend-dot color-red"></span><span>Unmaintained</span></div>
+                    </div>
+
+                    <!-- Floor Tabs -->
+                    <div class="floor-selector-container">
+                        <div class="floor-tabs" id="allot-floor-tabs">
+                            <button class="floor-tab active" data-floor="2">2nd</button>
+                            <button class="floor-tab" data-floor="3">3rd</button>
+                            <button class="floor-tab" data-floor="4">4th</button>
+                            <button class="floor-tab" data-floor="5">5th</button>
+                            <button class="floor-tab" data-floor="D">Driver</button>
+                        </div>
+                    </div>
+
+                    <!-- Block Tabs -->
+                    <div class="block-selector-container" id="allot-block-selector-container">
+                        <div class="block-toggle-buttons">
+                            <button class="block-btn active" id="btn-allot-block-a" data-block="A">A Block</button>
+                            <button class="block-btn" id="btn-allot-block-b" data-block="B">B Block</button>
+                        </div>
+                    </div>
+
+                    <!-- Room Selection Grid -->
+                    <div class="room-map-grid">
+                        <div class="grid-column">
+                            <h4 class="column-title">Left Side (Odd)</h4>
+                            <div class="room-list-column" id="allot-rooms-left">
+                                <!-- Dynamically loaded -->
+                            </div>
+                        </div>
+                        <div class="grid-column">
+                            <h4 class="column-title">Right Side (Even)</h4>
+                            <div class="room-list-column" id="allot-rooms-right">
+                                <!-- Dynamically loaded -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Allotment Status / Info Panel -->
+                    <div class="allotment-info-panel hidden" id="allotment-room-info-panel">
+                        <div class="panel-header">
+                            Selected Room: <strong id="panel-room-number">-</strong>
+                        </div>
+                        <div class="panel-body">
+                            <div>Selected count to allocate: <span id="panel-selected-count">0</span></div>
+                            <div>Room capacity remaining: <span id="panel-available-beds">0</span>/5</div>
+                            <div>Allocated to this room: <strong id="panel-allocated-count">0</strong></div>
+                            <div class="remaining-badge-container">
+                                Remaining to allot: <span class="badge" id="panel-remaining-count">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Bar -->
+                    <div class="bottom-action-bar flex-column">
+                        <button class="btn-large-gradient disabled" id="btn-allocate-room-action" disabled>Allocate Room</button>
+                        <button class="btn-secondary disabled" id="btn-print-report-trigger" style="margin-top: 8px;" disabled>Print Report</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SCREEN 6: REPORT / PRINT PAGE -->
+            <div id="screen-report" class="screen">
+                <header class="app-header">
+                    <button class="btn-back" id="btn-back-from-report" title="Back">
+                        <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+                    </button>
+                    <div style="display: flex; align-items: center; gap: 8px; flex: 1; margin-left: 8px;">
+                        <img src="logo.png" alt="Logo" class="clickable-logo" style="height: 36px; width: 36px; object-fit: contain; cursor: pointer; border-radius: 4px;">
+                        <h1 class="app-title" style="font-size: 17px;">Allotment Report</h1>
+                    </div>
+                    <button class="btn-icon" id="btn-home-from-report-header" title="Go Home" style="width: 32px; height: 32px; border-radius: 8px;">
+                        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+                    </button>
+                </header>
+
+                <div class="screen-body" style="padding-bottom: 100px;">
+                    <div class="report-container-card" id="printable-report-card">
+                        <div class="report-header" style="text-align: center;">
+                            <h2 style="font-size: 24px; font-weight: 800; color: #1e1b4b; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; font-family: 'Outfit', sans-serif;">Sonipat Retreat Centre, Nangal Khurd</h2>
+                            <div id="report-big-centre" style="font-size: 32px; font-weight: 900; background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 10px 0; line-height: 1.2;">-</div>
+                            <div id="report-big-arrival" style="font-size: 18px; font-weight: 800; color: #4f46e5; background: rgba(79, 70, 229, 0.08); padding: 10px 20px; border-radius: 12px; display: inline-block; margin: 8px 0; border: 1px solid rgba(79, 70, 229, 0.15); font-family: 'Outfit', sans-serif;">🕒 Arrival: -</div>
+                            <p class="report-meta" style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">Programme: <span id="report-prog-name">-</span> | Date: <span id="report-date">-</span></p>
+                        </div>
+                        
+                        <hr class="form-divider" style="margin: 16px 0;">
+
+                        <!-- Report stats summary (clickable) -->
+                        <div class="report-stats-section" id="report-stats-section" style="margin-bottom: 20px;">
+                            <h3 style="font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2.5px solid #cbd5e1; padding-bottom: 4px; margin-bottom: 12px;">Occupant Summary</h3>
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px;">
+                                <div class="stat-item clickable-report-stat" id="btn-report-stat-total" style="background: rgba(15, 23, 42, 0.03); border: 1px solid rgba(15, 23, 42, 0.08); border-radius: 12px; padding: 10px; text-align: center; cursor: pointer;">
+                                    <div style="font-size: 20px; font-weight: 800; color: #1e1b4b;" id="report-stat-total-people">0</div>
+                                    <div style="font-size: 11px; font-weight: 700; color: #64748b;">Total</div>
+                                </div>
+                                <div class="stat-item clickable-report-stat" id="btn-report-stat-guests" style="background: rgba(15, 23, 42, 0.03); border: 1px solid rgba(15, 23, 42, 0.08); border-radius: 12px; padding: 10px; text-align: center; cursor: pointer;">
+                                    <div style="font-size: 20px; font-weight: 800; color: #4f46e5;" id="report-stat-total-guests">0</div>
+                                    <div style="font-size: 11px; font-weight: 700; color: #4f46e5;">Guest</div>
+                                </div>
+                                <div class="stat-item clickable-report-stat" id="btn-report-stat-sevadharis" style="background: rgba(15, 23, 42, 0.03); border: 1px solid rgba(15, 23, 42, 0.08); border-radius: 12px; padding: 10px; text-align: center; cursor: pointer;">
+                                    <div style="font-size: 20px; font-weight: 800; color: #0ea5e9;" id="report-stat-total-sevadharis">0</div>
+                                    <div style="font-size: 11px; font-weight: 700; color: #0ea5e9;">Seva</div>
+                                </div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr; margin-bottom: 15px;">
+                                <div class="stat-item clickable-report-stat" id="btn-report-stat-nbks" style="background: rgba(15, 23, 42, 0.03); border: 1px solid rgba(15, 23, 42, 0.08); border-radius: 12px; padding: 10px; text-align: center; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                    <span style="font-size: 11px; font-weight: 700; color: #f59e0b;">Non-BK:</span>
+                                    <span style="font-size: 20px; font-weight: 800; color: #f59e0b;" id="report-stat-total-nbks">0</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Report Summary Lists -->
+                        <div class="report-details-section">
+                            <h3 style="font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2.5px solid #cbd5e1; padding-bottom: 4px; margin-bottom: 12px;">Room Allotments</h3>
+                            <div class="report-table" id="report-room-allotments-list">
+                                <!-- Pre-formatted reports, e.g. Mata(5) = 301 -->
+                            </div>
+                        </div>
+
+                        <!-- Hide Centre-Wise Summary completely -->
+                        <div class="report-details-section hidden">
+                            <h3>Centre-Wise Summary</h3>
+                            <div class="report-table-vertical" id="report-centre-summary-list">
+                                <!-- Centre summary breakdown -->
+                            </div>
+                        </div>
+
+                        <div class="report-details-section hidden" id="report-seva-section">
+                            <h3>Ruhani Seva Duty Sheet</h3>
+                            <div class="report-table" id="report-seva-duty-list">
+                                <!-- Seva lists -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Shareable card for screenshotting (contains graphics and styles) -->
+                    <div class="share-card-container">
+                        <p style="text-align: center; font-size: 12px; color: #94a3b8; margin-bottom: 10px;">Screenshot ready template below</p>
+                    </div>
+
+                    <!-- Go Home Button -->
+                    <div style="margin-top: 15px; margin-bottom: 75px;">
+                        <button class="btn-secondary" id="btn-home-from-report-body" style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+                            Go Back to Home
+                        </button>
+                    </div>
+
+                    <div class="bottom-action-bar flex-row gap-10">
+                        <button class="btn-primary" id="btn-print-action" style="flex: 1;">Print Report</button>
+                        <button class="btn-secondary" id="btn-whatsapp-share" style="flex: 1;">
+                            <svg viewBox="0 0 24 24" width="18" height="18" style="vertical-align: middle; margin-right: 6px;"><path fill="currentColor" d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2m.01 1.67c2.2 0 4.26.86 5.82 2.42a8.136 8.136 0 0 1 2.41 5.82c0 4.54-3.7 8.24-8.24 8.24-1.44 0-2.86-.38-4.1-1.09l-.29-.17-3.05.8.82-2.98-.19-.3a8.21 8.21 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.23-8.24m-3.53 4.75c-.19-.43-.4-.44-.58-.45l-.49-.01c-.17 0-.45.06-.68.32-.23.25-.88.86-.88 2.1s.9 2.43 1.02 2.6c.13.17 1.77 2.7 4.29 3.79 2.11.91 2.54.73 3 .68.46-.05 1.48-.6 1.69-1.19.2-.58.2-1.09.14-1.19-.06-.1-.23-.17-.49-.3-.26-.13-1.48-.73-1.71-.81-.23-.08-.4-.13-.56.12-.17.25-.65.81-.8 1-.14.17-.29.19-.55.06-1.12-.56-1.93-1.04-2.69-2.35-.2-.34.2-.32.57-1.06.06-.12.03-.23-.01-.32-.05-.09-.49-1.19-.67-1.63z"/></svg>
+                            WhatsApp Share
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SCREEN 8: SEVADHARI DETAILS -->
+            <div id="screen-sevadhari-details" class="screen">
+                <header class="app-header">
+                    <button class="btn-back" id="btn-back-from-sevadhari-details">
+                        <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+                    </button>
+                    <div style="display: flex; align-items: center; gap: 8px; flex: 1; margin-left: 8px;">
+                        <img src="logo.png" alt="Logo" class="clickable-logo" style="height: 36px; width: 36px; object-fit: contain; cursor: pointer; border-radius: 4px;">
+                        <h1 class="app-title" style="font-size: 17px;">Sevadhari Details</h1>
+                    </div>
+                    <div style="width: 24px;"></div>
+                </header>
+
+                <div class="screen-body" style="padding-bottom: 80px;">
+                    <!-- Segmented tab control for Centre Wise vs Department Wise -->
+                    <div class="form-group" style="margin-top: 5px; margin-bottom: 15px;">
+                        <div class="segmented-control" id="toggle-seva-view-mode">
+                            <button class="segment-btn active" data-value="centre">Centre Wise</button>
+                            <button class="segment-btn" data-value="dept">Department Wise</button>
+                        </div>
+                    </div>
+
+                    <!-- VIEW 1: CENTRE WISE (DEFAULT) -->
+                    <div id="seva-details-centre-view">
+                        <!-- Seva Unallocated -->
+                        <div class="section-title-row">
+                            <h2>Seva Unallocated (Room Allotted)</h2>
+                        </div>
+                        <div id="seva-unallocated-container" class="programmes-list">
+                            <!-- Loaded dynamically -->
+                        </div>
+
+                        <!-- Seva Allocated -->
+                        <div class="section-title-row" style="margin-top: 15px;">
+                            <h2>Seva Allocated (Centre-Wise)</h2>
+                        </div>
+                        <div id="seva-allocated-container" class="programmes-list">
+                            <!-- Loaded dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- VIEW 2: DEPARTMENT WISE -->
+                    <div id="seva-details-dept-view" class="hidden">
+                        <div class="section-title-row">
+                            <h2>Departments Duty Summary</h2>
+                        </div>
+                        <div id="seva-dept-summary-container" class="programmes-list">
+                            <!-- Loaded dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MODALS -->
+            
+            <!-- Modal: Action Chooser (Register / View Report) -->
+            <div id="modal-action-chooser" class="modal-overlay">
+                <div class="modal-card">
+                    <div class="modal-header">
+                        <h3 id="chooser-modal-title">Select Action</h3>
+                        <button class="btn-close" id="btn-close-chooser">✕</button>
+                    </div>
+                    <div class="modal-body flex-column gap-15">
+                        <button class="btn-large-gradient" id="btn-chooser-register">Register Participants</button>
+                        <button class="btn-secondary" id="btn-chooser-report">View Allotment Report</button>
+                        <button class="btn-secondary" id="btn-chooser-finish" style="background: rgba(239, 68, 68, 0.1); color: var(--accent-red); border: 1px solid rgba(239, 68, 68, 0.25);">Finish Programme</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal: Add Programme -->
+            <div id="modal-add-programme" class="modal-overlay">
+                <div class="modal-card">
+                    <div class="modal-header">
+                        <h3>Add New Programme</h3>
+                        <button class="btn-close" id="btn-close-add-prog">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label class="form-label" for="new-prog-name">Programme Name</label>
+                            <input type="text" id="new-prog-name" class="form-input" placeholder="e.g. Annual Bhatti, Youth Camp">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="new-prog-date">Start Date</label>
+                            <input type="date" id="new-prog-date" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="new-prog-end-date">End Date</label>
+                            <input type="date" id="new-prog-end-date" class="form-input">
+                        </div>
+                        <button class="btn-large-gradient" id="btn-save-new-programme">Save Programme</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal: Maintenance Toggle / Room Details -->
+            <div id="modal-maintenance" class="modal-overlay">
+                <div class="modal-card" style="max-width: 340px;">
+                    <div class="modal-header">
+                        <h3>Room <span id="modal-maint-room-number">-</span> Details</h3>
+                        <button class="btn-close" id="btn-close-maint">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- Occupants details grouped by centre -->
+                        <div class="form-group">
+                            <label class="form-label">Current Occupants</label>
+                            <div id="modal-room-occupants" class="box-container" style="margin-bottom: 0; background: var(--bg-slate-900); border: 1px solid rgba(15, 23, 42, 0.08); padding: 12px; font-size: 13px; max-height: 160px; overflow-y: auto;">
+                                <!-- Dynamically loaded -->
+                            </div>
+                        </div>
+                        
+                        <hr class="form-divider" id="maint-divider" style="margin: 14px 0;">
+
+                        <div class="form-group" id="maint-checkbox-container">
+                            <label class="checkbox-container-label">
+                                <input type="checkbox" id="maint-checkbox">
+                                <span class="custom-checkbox"></span>
+                                Mark as Unmaintained (Red color)
+                            </label>
+                        </div>
+                        <div class="form-group" id="maint-issue-container">
+                            <label class="form-label" for="maint-issue-select">Select Issue Details</label>
+                            <select id="maint-issue-select" class="form-select">
+                                <option value="">-- Select Issue (Optional) --</option>
+                                <option value="Electricity Problem">Electricity Problem</option>
+                                <option value="Maintenance Issue">Maintenance Issue</option>
+                                <option value="Cleaning Required">Cleaning Required</option>
+                                <option value="Plumbing Issue">Plumbing Issue</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <button class="btn-large-gradient" id="btn-save-maintenance">Save Status</button>
+                    </div>
+                </div>
+            </div>
+            <!-- Modal: Centre Details Popup -->
+            <div id="modal-centre-details" class="modal-overlay">
+                <div class="modal-card" style="max-width: 360px;">
+                    <div class="modal-header">
+                        <h3><span id="modal-centre-name">-</span> Details</h3>
+                        <button class="btn-close" id="btn-close-centre-details">✕</button>
+                    </div>
+                    <div class="modal-body" style="max-height: 480px; overflow-y: auto;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Total Occupants Breakdown</label>
+                            <div id="modal-centre-occupants-list" class="box-container" style="background: var(--bg-slate-900); padding: 14px; font-size: 13px; margin-bottom: 0;">
+                                <!-- Dynamically loaded -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal: Department Details Popup -->
+            <div id="modal-dept-details" class="modal-overlay">
+                <div class="modal-card" style="max-width: 360px;">
+                    <div class="modal-header">
+                        <h3><span id="modal-dept-title">-</span> Details</h3>
+                        <button class="btn-close" id="btn-close-dept-details">✕</button>
+                    </div>
+                    <div class="modal-body" style="max-height: 480px; overflow-y: auto;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Duty Allocated Sevadharis</label>
+                            <div id="modal-dept-sevadharis-list" class="box-container" style="background: var(--bg-slate-900); padding: 14px; font-size: 13px; margin-bottom: 0; display: flex; flex-direction: column; gap: 10px;">
+                                <!-- Dynamically loaded -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal: Occupant Summary Details -->
+            <div id="modal-occupant-summary-details" class="modal-overlay">
+                <div class="modal-card" style="max-width: 420px; width: 95%;">
+                    <div class="modal-header">
+                        <h3 style="font-size: 18px; font-weight: 800;"><span id="modal-summary-title">-</span> Details</h3>
+                        <button class="btn-close" id="btn-close-summary-details">✕</button>
+                    </div>
+                    <div class="modal-body" style="max-height: 75vh; overflow-y: auto;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <div id="modal-summary-details-content" class="box-container" style="background: var(--bg-slate-900); padding: 16px; font-size: 15px; margin-bottom: 0; display: flex; flex-direction: column; gap: 10px;">
+                                <!-- Dynamically loaded breakdown rows -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal: User Settings & Logout -->
+            <div id="modal-user-menu" class="modal-overlay">
+                <div class="modal-card" style="max-width: 360px;">
+                    <div class="modal-header">
+                        <h3 style="font-size: 18px; font-weight: 800;">User Menu</h3>
+                        <button class="btn-close" id="btn-close-user-menu">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group" style="margin-bottom: 15px; text-align: center;">
+                            <span class="form-label" style="font-size: 14px; color: #64748b;">Logged in as:</span>
+                            <div id="user-menu-role" style="font-size: 18px; font-weight: 800; color: var(--accent-indigo); text-transform: uppercase; margin-top: 5px;">Admin</div>
+                        </div>
+                        
+                        <!-- Admin settings (only visible to Admin) -->
+                        <div id="admin-settings-section" style="border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 15px; margin-bottom: 20px;">
+                            <label class="form-label" style="font-size: 13px; color: #fff;">Viewer Password Settings</label>
+                            <div class="input-group" style="margin-top: 5px; display: flex; gap: 8px;">
+                                <input type="text" id="input-viewer-password" class="form-control" placeholder="Enter Viewer Password" style="font-weight: 700; color: #fff; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px;">
+                                <button class="btn-primary" id="btn-save-viewer-password" style="padding: 0 16px; font-size: 13px; font-weight: 700; border-radius: 8px; border: none; cursor: pointer; background: var(--primary-gradient);">Save</button>
+                            </div>
+                            <small style="color: #64748b; display: block; margin-top: 6px; font-size: 11px;">Viewer typed password can view summaries, lists and share reports, but cannot change data.</small>
+                        </div>
+                        
+                        <button class="btn-primary" id="btn-user-logout" style="width: 100%; background: linear-gradient(135deg, #ef4444, #b91c1c); font-weight: 700; padding: 12px; font-size: 15px; border-radius: 8px; border: none; cursor: pointer;">Logout</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Screen: Login (Visible first when not logged in) -->
+        <div id="screen-login" class="screen-login-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; z-index: 1000; background: linear-gradient(135deg, #0f172a, #1e1b4b); padding: 20px; box-sizing: border-box;">
+            <div class="frosted-glass" style="width: 100%; max-width: 340px; padding: 30px 24px; border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5); text-align: center; background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);">
+                <div style="margin-bottom: 24px;">
+                    <img src="logo.png" alt="Logo" style="height: 64px; width: 64px; object-fit: contain; margin-bottom: 12px; border-radius: 12px;">
+                    <h2 style="font-size: 20px; font-weight: 800; color: #fff; margin-bottom: 6px;">Sonipat Retreat Centre</h2>
+                    <p style="color: #94a3b8; font-size: 13px; font-weight: 500;">Accommodation Portal</p>
+                </div>
+                
+                <div class="form-group" style="text-align: left; margin-bottom: 20px;">
+                    <label class="form-label" style="font-size: 13px; color: #e2e8f0; font-weight: 600;">Enter Password</label>
+                    <div style="position: relative;">
+                        <input type="password" id="input-login-password" class="form-control" placeholder="••••••••" style="width: 100%; font-size: 18px; text-align: center; letter-spacing: 4px; padding: 12px 48px 12px 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; color: #fff; box-sizing: border-box;">
+                        <button type="button" id="btn-toggle-password-visibility" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: #94a3b8; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
+                            <!-- SVG for Eye (Open) -->
+                            <svg id="eye-icon-open" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                            <!-- SVG for Eye (Closed/Slash) -->
+                            <svg id="eye-icon-closed" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+                                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                                <line x1="1" y1="1" x2="23" y2="23"></line>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                
+                <button class="btn-primary" id="btn-login-action" style="width: 100%; font-weight: 700; padding: 14px; font-size: 15px; border-radius: 10px; border: none; cursor: pointer; background: var(--primary-gradient);">Login</button>
+                <div id="login-error-msg" style="color: #ef4444; font-size: 12px; font-weight: 600; margin-top: 10px; display: none;">Incorrect Password!</div>
+            </div>
+        </div>
+
+        <!-- Modal: Niwasi Category Details (Switches Popup) -->
+        <div id="modal-niwasi-category-details" class="modal-overlay" style="z-index: 1100;">
+            <div class="modal-card" style="max-width: 380px; width: 95%;">
+                <div class="modal-header">
+                    <h3 style="font-size: 18px; font-weight: 800; color: #000;" id="modal-niwasi-cat-title">Category Details</h3>
+                    <button class="btn-close" id="btn-close-niwasi-cat-details">✕</button>
+                </div>
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto; background: var(--bg-slate-900); padding: 14px; border-radius: 10px;">
+                    <div id="modal-niwasi-cat-content" style="display: flex; flex-direction: column; gap: 8px;">
+                        <!-- Switches rendered dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal: Subcategory Occupants List (Allotment & Arrival popup) -->
+        <div id="modal-subcategory-occupants-list" class="modal-overlay" style="z-index: 1200;">
+            <div class="modal-card" style="max-width: 380px; width: 95%;">
+                <div class="modal-header">
+                    <h3 style="font-size: 17px; font-weight: 800; color: #000;" id="modal-subcat-occupants-title">Occupants</h3>
+                    <button class="btn-close" id="btn-close-subcat-occupants">✕</button>
+                </div>
+                <div class="modal-body" style="max-height: 60vh; overflow-y: auto; background: var(--bg-slate-900); padding: 16px; border-radius: 10px;">
+                    <div id="modal-subcat-occupants-content" style="display: flex; flex-direction: column; gap: 10px;">
+                        <!-- Dynamically loaded -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
