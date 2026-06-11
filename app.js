@@ -205,8 +205,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let isFirebaseActive = false;
     let dbRef = null;
     let isWritingFirebase = false;
+    let isFirebaseLoaded = false;
 
-    function saveState() {
+    function saveState(syncToFirebase = true) {
         try {
             const dataToSave = {
                 rooms: state.rooms,
@@ -226,7 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(localData));
 
             // Sync with Firebase in real time if configured
-            if (isFirebaseActive && dbRef) {
+            if (syncToFirebase && isFirebaseActive && dbRef && isFirebaseLoaded) {
                 isWritingFirebase = true;
                 dbRef.set(dataToSave).then(() => {
                     isWritingFirebase = false;
@@ -257,12 +258,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Restore programmes
-        if (data.programmes) {
-            state.programmes = data.programmes;
-        }
-        if (data.pastProgrammes) {
-            state.pastProgrammes = data.pastProgrammes;
-        }
+        state.programmes = data.programmes || [
+            { id: 'monthly', name: 'Monthly Sevadhari Programme', date: '2026-06-01', endDate: '2026-06-30', type: 'monthly' }
+        ];
+        state.pastProgrammes = data.pastProgrammes || [];
 
         // Restore registration
         if (data.registration) {
@@ -337,6 +336,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Listen to remote changes and sync automatically
                 dbRef.on('value', (snapshot) => {
+                    isFirebaseLoaded = true; // Mark as loaded!
                     if (isWritingFirebase) return; // Prevent loops
                     const remoteData = snapshot.val();
                     if (remoteData) {
@@ -380,6 +380,8 @@ document.addEventListener('DOMContentLoaded', () => {
             pastCard.classList.remove('expanded');
         }
     });
+
+    // Clear Past Programmes listener removed in favor of individual past program deletes
 
     // Finish Programme Action Click
     document.getElementById('btn-chooser-finish').addEventListener('click', () => {
@@ -539,29 +541,80 @@ document.addEventListener('DOMContentLoaded', () => {
         return false;
     }
 
-    function openSubcategoryOccupantsModal(label, categoryType, isPast, pastProg, allocatedArray) {
+    function openSubcategoryCentresModal(label, categoryType, isPast, pastProg, allocatedArray) {
+        const modal = document.getElementById('modal-niwasi-category-details');
+        const titleEl = document.getElementById('modal-niwasi-cat-title');
+        const contentEl = document.getElementById('modal-niwasi-cat-content');
+
+        if (!modal || !titleEl || !contentEl) return;
+
+        // Filter matched occupants for this subcategory
+        const matched = allocatedArray.filter(p => matchesLabel(p, label));
+
+        // Group by Centre
+        const centreCounts = {};
+        matched.forEach(p => {
+            const c = p.centre || 'Unknown';
+            centreCounts[c] = (centreCounts[c] || 0) + 1;
+        });
+
+        titleEl.textContent = `${label} - Centres`;
+        contentEl.innerHTML = '';
+
+        Object.keys(centreCounts).forEach(centreName => {
+            const count = centreCounts[centreName];
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.justifyContent = 'space-between';
+            row.style.alignItems = 'center';
+            row.style.padding = '12px 14px';
+            row.style.background = 'rgba(0, 0, 0, 0.02)';
+            row.style.borderRadius = '8px';
+            row.style.marginBottom = '6px';
+            row.style.border = '1px solid rgba(0, 0, 0, 0.05)';
+            row.style.cursor = 'pointer';
+
+            row.innerHTML = `
+                <span style="font-weight: 800; color: #000000; font-size: 15px;">${centreName}</span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <strong style="color: var(--accent-blue); font-size: 16px;">${count}</strong>
+                    <span style="color: #64748b; font-size: 11px;">▶</span>
+                </div>
+            `;
+
+            row.addEventListener('click', () => {
+                openSubcategoryOccupantsModal(label, categoryType, isPast, pastProg, matched, centreName);
+            });
+
+            contentEl.appendChild(row);
+        });
+
+        modal.classList.add('active');
+    }
+
+    function openSubcategoryOccupantsModal(label, categoryType, isPast, pastProg, matched, centreName) {
         const modal = document.getElementById('modal-subcategory-occupants-list');
         const titleEl = document.getElementById('modal-subcat-occupants-title');
         const contentEl = document.getElementById('modal-subcat-occupants-content');
 
         if (!modal || !titleEl || !contentEl) return;
 
-        // Filter matched occupants
-        const matched = allocatedArray.filter(p => matchesLabel(p, label));
+        // Filter matched occupants for this centre
+        const finalMatched = matched.filter(p => (p.centre || 'Unknown') === centreName);
 
-        titleEl.textContent = `${label} Allotments`;
+        titleEl.textContent = `${label} from ${centreName}`;
         contentEl.innerHTML = '';
 
-        if (matched.length === 0) {
+        if (finalMatched.length === 0) {
             contentEl.innerHTML = '<div style="color: #94a3b8; font-style: italic; text-align: center; padding: 15px 0;">No occupants found.</div>';
         } else {
-            matched.forEach((p, idx) => {
+            finalMatched.forEach((p, idx) => {
                 const row = document.createElement('div');
                 row.style.display = 'flex';
                 row.style.justifyContent = 'space-between';
                 row.style.alignItems = 'center';
                 row.style.padding = '10px 0';
-                row.style.borderBottom = '1px solid rgba(255, 255, 255, 0.05)';
+                row.style.borderBottom = '1px solid rgba(0, 0, 0, 0.05)';
 
                 // Resolve display name
                 let displayName = p.name;
@@ -576,7 +629,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 row.innerHTML = `
                     <div style="display: flex; flex-direction: column;">
-                        <span style="font-weight: 700; color: #ffffff; font-size: 14px;">${displayName}</span>
+                        <span style="font-weight: 800; color: #000000; font-size: 14px;">${displayName}</span>
                         <span style="color: #64748b; font-size: 11px;">🕒 ${p.arrivalTime || 'Unknown'}</span>
                     </div>
                     <span style="font-weight: 700; color: var(--accent-indigo); font-size: 14px; background: rgba(79, 70, 229, 0.1); padding: 4px 10px; border-radius: 20px;">Room ${p.roomNum}</span>
@@ -717,7 +770,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (count > 0) {
                 row.addEventListener('click', () => {
-                    openSubcategoryOccupantsModal(key, type, isPast, pastProg, allocatedArray);
+                    openSubcategoryCentresModal(key, type, isPast, pastProg, allocatedArray);
                 });
             }
             contentEl.appendChild(row);
@@ -967,15 +1020,27 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const isViewer = state.currentUserRole === 'viewer';
+
         state.pastProgrammes.forEach(prog => {
             const card = document.createElement('div');
             card.className = 'programme-card';
+            
+            const deleteBtnHtml = isViewer ? '' : `
+                <button class="btn-delete-past-prog" title="Delete Past Programme" style="margin-left: 8px;">
+                    <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                </button>
+            `;
+
             card.innerHTML = `
-                <div class="prog-info">
+                <div class="prog-info" style="flex: 1;">
                     <h3>${prog.name}</h3>
                     <p>Finished: ${prog.finishDate} | Centre: ${prog.centreName}</p>
                 </div>
-                <span class="prog-badge monthly">Past</span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="prog-badge monthly" style="margin-right: 0;">Past</span>
+                    ${deleteBtnHtml}
+                </div>
             `;
 
             card.addEventListener('click', () => {
@@ -983,6 +1048,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 generateReportView(true, prog);
                 navigateTo('screen-report');
             });
+
+            // Bind individual delete button
+            const delBtn = card.querySelector('.btn-delete-past-prog');
+            if (delBtn) {
+                delBtn.addEventListener('click', (e) => {
+                    e.stopPropagation(); // Prevent opening report
+                    
+                    if (state.currentUserRole === 'viewer') {
+                        alert('Viewers cannot delete past programmes.');
+                        return;
+                    }
+                    
+                    if (confirm(`Are you sure you want to delete the past programme "${prog.name}"?`)) {
+                        state.pastProgrammes = state.pastProgrammes.filter(p => p.id !== prog.id);
+                        saveState();
+                        renderPastProgrammes();
+                    }
+                });
+            }
 
             container.appendChild(card);
         });
@@ -1255,7 +1339,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 const typeStr = p.type ? p.type : '';
                 const nameDisplay = p.name ? `${p.name} (${p.subcategory})` : p.subcategory;
                 
-                // Do not render delete button for viewers
+                // Do not render edit/delete buttons for viewers
+                const editBtnHtml = isViewer ? '' : `
+                    <button class="btn-edit-occupant" data-idx="${idx}" title="Edit / Transfer Occupant">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                    </button>
+                `;
+                
                 const deleteBtnHtml = isViewer ? '' : `
                     <button class="btn-delete-occupant" data-idx="${idx}" title="Remove Occupant">
                         <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
@@ -1273,8 +1363,29 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span style="color: var(--accent-red); font-weight: 700; font-size: 11px;">${depStr}</span>
                         </div>
                     </div>
-                    ${deleteBtnHtml}
+                    <div style="display: flex; align-items: center;">
+                        ${editBtnHtml}
+                        ${deleteBtnHtml}
+                    </div>
                 `;
+                
+                const editBtn = personDiv.querySelector('.btn-edit-occupant');
+                if (editBtn) {
+                    editBtn.addEventListener('click', (e) => {
+                        const idxToEdit = parseInt(e.currentTarget.dataset.idx);
+                        const occupant = room.allocated[idxToEdit];
+                        
+                        document.getElementById('edit-occupant-room-num').value = roomNum;
+                        document.getElementById('edit-occupant-idx').value = idxToEdit;
+                        document.getElementById('edit-occupant-name').value = occupant.name || '';
+                        document.getElementById('edit-occupant-subcat').value = occupant.subcategory || 'Mata';
+                        document.getElementById('edit-occupant-centre').value = occupant.centre || '';
+                        document.getElementById('edit-occupant-phone').value = occupant.phone || '';
+                        document.getElementById('edit-occupant-dep-date').value = occupant.departureDate || '';
+                        
+                        document.getElementById('modal-edit-occupant').classList.add('active');
+                    });
+                }
                 
                 const deleteBtn = personDiv.querySelector('.btn-delete-occupant');
                 if (deleteBtn) {
@@ -1322,6 +1433,121 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('btn-close-maint').addEventListener('click', () => {
         document.getElementById('modal-maintenance').classList.remove('active');
+    });
+
+    // Edit/Transfer Occupant Modal triggers
+    document.getElementById('btn-close-edit-occupant').addEventListener('click', () => {
+        document.getElementById('modal-edit-occupant').classList.remove('active');
+    });
+
+    document.getElementById('btn-save-edit-occupant').addEventListener('click', () => {
+        const roomNum = document.getElementById('edit-occupant-room-num').value;
+        const idx = parseInt(document.getElementById('edit-occupant-idx').value);
+        const room = state.rooms[roomNum];
+        if (!room || !room.allocated[idx]) return;
+
+        const newName = document.getElementById('edit-occupant-name').value.trim();
+        const newSubcat = document.getElementById('edit-occupant-subcat').value;
+        const newCentre = document.getElementById('edit-occupant-centre').value.trim();
+        const newPhone = document.getElementById('edit-occupant-phone').value.trim();
+        const newDepDate = document.getElementById('edit-occupant-dep-date').value;
+
+        // Update details
+        room.allocated[idx].name = newName;
+        room.allocated[idx].subcategory = newSubcat;
+        room.allocated[idx].centre = newCentre;
+        room.allocated[idx].phone = newPhone;
+        room.allocated[idx].departureDate = newDepDate || null;
+
+        // Recalculate room occupancy beds and gender
+        const adults = room.allocated.filter(p => p.subcategory !== 'Children');
+        room.occupied = adults.length;
+
+        if (adults.length === 0) {
+            room.gender = null;
+        } else {
+            const hasFemale = adults.some(p => ['Mata', 'Kumari', 'Female', 'BK Teacher'].includes(p.subcategory));
+            const hasMale = adults.some(p => ['Adhar Kumar', 'Kumar', 'Male', 'Driver'].includes(p.subcategory));
+            if (hasFemale) room.gender = 'female';
+            else if (hasMale) room.gender = 'male';
+            else room.gender = null;
+        }
+
+        saveState();
+        document.getElementById('modal-edit-occupant').classList.remove('active');
+        openMaintenanceModal(roomNum); // Refresh Room Details modal
+        renderRoomMap('viz');
+        updateDashboardStats();
+        alert('Occupant information updated successfully.');
+    });
+
+    document.getElementById('btn-transfer-edit-occupant').addEventListener('click', () => {
+        const roomNum = document.getElementById('edit-occupant-room-num').value;
+        const idx = parseInt(document.getElementById('edit-occupant-idx').value);
+        const room = state.rooms[roomNum];
+        if (!room || !room.allocated[idx]) return;
+
+        const occupant = room.allocated[idx];
+        const displayName = occupant.name ? `${occupant.name} (${occupant.subcategory})` : occupant.subcategory;
+
+        if (!confirm(`Are you sure you want to transfer ${displayName} out of Room ${roomNum}? \n\nThis will remove them from Room ${roomNum} and load their details on the Room Allotment screen to select a new room.`)) {
+            return;
+        }
+
+        // Remove from current room
+        room.allocated.splice(idx, 1);
+
+        // Recalculate room occupancy beds and gender
+        const adults = room.allocated.filter(p => p.subcategory !== 'Children');
+        room.occupied = adults.length;
+
+        if (adults.length === 0) {
+            room.gender = null;
+        } else {
+            const hasFemale = adults.some(p => ['Mata', 'Kumari', 'Female', 'BK Teacher'].includes(p.subcategory));
+            const hasMale = adults.some(p => ['Adhar Kumar', 'Kumar', 'Male', 'Driver'].includes(p.subcategory));
+            if (hasFemale) room.gender = 'female';
+            else if (hasMale) room.gender = 'male';
+            else room.gender = null;
+        }
+
+        // Set up registration state with occupant details
+        state.registration = {
+            mode: 'individual',
+            category: occupant.category || 'bk',
+            type: occupant.type || 'guest',
+            centreName: occupant.centre || '',
+            centrePhone: occupant.phone || '',
+            arrivalTime: occupant.arrivalTime || getCurrentFormattedDateTime(),
+            departureDate: occupant.departureDate || null,
+            counts: {
+                mata: 0, kumari: 0, teacher: 0, children: 0, adhar_kumar: 0, kumar: 0,
+                nbk_female: 0, nbk_male: 0, nbk_children: 0, nbk_driver: 0
+            },
+            individuals: [
+                {
+                    name: occupant.name || '',
+                    age: occupant.age || '',
+                    phone: occupant.phone || '',
+                    type: occupant.subcategory
+                }
+            ],
+            sevaAllocations: {}
+        };
+
+        // Initialize Allotment State counts
+        setupAllotmentCounts();
+
+        // Pre-select category checkbox
+        state.allotment.selectedCategories = [occupant.subcategory];
+
+        saveState();
+        document.getElementById('modal-edit-occupant').classList.remove('active');
+        document.getElementById('modal-maintenance').classList.remove('active');
+
+        // Route to allotment screen
+        navigateTo('screen-allotment');
+        alert(`${displayName} has been transferred. Please select a room on the allotment page to place them.`);
     });
 
     document.getElementById('btn-save-maintenance').addEventListener('click', () => {
@@ -3233,15 +3459,15 @@ document.addEventListener('DOMContentLoaded', () => {
             nameRow.style.justifyContent = 'space-between';
             nameRow.style.alignItems = 'center';
             nameRow.style.padding = '10px 12px';
-            nameRow.style.background = 'rgba(255, 255, 255, 0.03)';
+            nameRow.style.background = 'rgba(0, 0, 0, 0.02)';
             nameRow.style.borderRadius = '8px';
             nameRow.style.marginBottom = '6px';
-            nameRow.style.border = '1px solid rgba(255, 255, 255, 0.05)';
+            nameRow.style.border = '1px solid rgba(0, 0, 0, 0.05)';
 
             const nameSpan = document.createElement('span');
             nameSpan.className = 'niwasi-switch-label';
             nameSpan.textContent = name;
-            nameSpan.style.color = '#ffffff';
+            nameSpan.style.color = 'var(--text-primary)';
             nameSpan.style.fontSize = '15px';
             nameSpan.style.fontWeight = '700';
             
@@ -3310,6 +3536,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const isViewer = state.currentUserRole === 'viewer';
         
+        // Past programme deletes are now handled per individual card
+
         // 1. Hide Add Programme Trigger
         const addProgBtn = document.getElementById('btn-add-programme-trigger');
         if (addProgBtn) addProgBtn.style.display = isViewer ? 'none' : 'block';
@@ -3351,13 +3579,13 @@ document.addEventListener('DOMContentLoaded', () => {
             errorEl.style.display = 'none';
             passwordInput.value = '';
             applyRoleSettings();
-            saveState();
+            saveState(false);
         } else if (password === state.viewerPassword) {
             state.currentUserRole = 'viewer';
             errorEl.style.display = 'none';
             passwordInput.value = '';
             applyRoleSettings();
-            saveState();
+            saveState(false);
         } else {
             errorEl.textContent = 'Incorrect Password!';
             errorEl.style.display = 'block';
@@ -3380,7 +3608,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('input-login-password').value = '';
         document.getElementById('login-error-msg').style.display = 'none';
         applyRoleSettings();
-        saveState();
+        saveState(false);
     });
 
     document.getElementById('btn-save-viewer-password').addEventListener('click', () => {

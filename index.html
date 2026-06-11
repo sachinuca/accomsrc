@@ -15,12 +15,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=2.1">
     <!-- Firebase SDK (Compat Version for simple integration) -->
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
     <script src="firebase-config.js"></script>
-    <script src="app.js" defer></script>
+    <script src="app.js?v=2.1" defer></script>
 </head>
 <body>
     <!-- Mobile Simulator Wrapper -->
@@ -819,6 +819,55 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Modal: Edit / Transfer Occupant -->
+            <div id="modal-edit-occupant" class="modal-overlay" style="z-index: 1250;">
+                <div class="modal-card" style="max-width: 340px;">
+                    <div class="modal-header">
+                        <h3 style="font-size: 16px; font-weight: 700; color: #000000; font-family: 'Outfit', sans-serif;">Edit / Transfer Occupant</h3>
+                        <button class="btn-close" id="btn-close-edit-occupant">✕</button>
+                    </div>
+                    <div class="modal-body" style="padding-top: 5px;">
+                        <input type="hidden" id="edit-occupant-room-num">
+                        <input type="hidden" id="edit-occupant-idx">
+                        
+                        <div class="form-group" style="margin-bottom: 12px;">
+                            <label class="form-label" for="edit-occupant-name" style="font-size: 12px; margin-bottom: 4px;">Name</label>
+                            <input type="text" id="edit-occupant-name" class="form-input" placeholder="e.g. Ramesh Kumar">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 12px;">
+                            <label class="form-label" for="edit-occupant-subcat" style="font-size: 12px; margin-bottom: 4px;">Subcategory</label>
+                            <select id="edit-occupant-subcat" class="form-select">
+                                <option value="Mata">Mata</option>
+                                <option value="Kumari">Kumari</option>
+                                <option value="BK Teacher">BK Teacher</option>
+                                <option value="Adhar Kumar">Adhar Kumar</option>
+                                <option value="Kumar">Kumar</option>
+                                <option value="Children">Children</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Driver">Driver</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 12px;">
+                            <label class="form-label" for="edit-occupant-centre" style="font-size: 12px; margin-bottom: 4px;">Centre</label>
+                            <input type="text" id="edit-occupant-centre" class="form-input" placeholder="e.g. Delhi">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 12px;">
+                            <label class="form-label" for="edit-occupant-phone" style="font-size: 12px; margin-bottom: 4px;">Phone</label>
+                            <input type="text" id="edit-occupant-phone" class="form-input" placeholder="e.g. 9999999999">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 16px;">
+                            <label class="form-label" for="edit-occupant-dep-date" style="font-size: 12px; margin-bottom: 4px;">Departure Date</label>
+                            <input type="date" id="edit-occupant-dep-date" class="form-input">
+                        </div>
+                        
+                        <button class="btn-large-gradient" id="btn-save-edit-occupant" style="margin-bottom: 10px; font-size: 13px; padding: 10px;">Save Changes</button>
+                        <button class="btn-large-gradient" id="btn-transfer-edit-occupant" style="background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%); box-shadow: 0 6px 20px rgba(14, 165, 233, 0.4); font-size: 13px; padding: 10px;">Transfer / Re-allot Room</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Modal: Centre Details Popup -->
             <div id="modal-centre-details" class="modal-overlay">
                 <div class="modal-card" style="max-width: 360px;">
