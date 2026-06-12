@@ -202,6 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (state.activeScreen === 'screen-allotment') {
                 renderRoomMap('allot');
             }
+            saveState();
         }
     }
 
@@ -233,8 +234,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const localData = { ...dataToSave, currentUserRole: state.currentUserRole };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(localData));
 
-            // Sync with Firebase in real time if configured
-            if (syncToFirebase && isFirebaseActive && dbRef && isFirebaseLoaded) {
+            // Sync with Firebase in real time if configured (Admin only)
+            const isViewer = state.currentUserRole === 'viewer';
+            if (syncToFirebase && isFirebaseActive && dbRef && isFirebaseLoaded && !isViewer) {
                 isWritingFirebase = true;
                 dbRef.set(dataToSave).then(() => {
                     isWritingFirebase = false;
@@ -515,6 +517,7 @@ document.addEventListener('DOMContentLoaded', () => {
         navigateTo('screen-home');
         renderPastProgrammes();
         updateDashboardStats();
+        saveState();
     });
 
     // Quick Stats click handlers to open details popup
@@ -1032,7 +1035,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('stat-total-sevadharis').textContent = sevaTotal;
         document.getElementById('stat-total-niwasis').textContent = niwasiTotal;
         document.getElementById('stat-total-nbks').textContent = nbkTotal;
-        saveState();
     }
 
     function renderProgrammes() {
@@ -1492,6 +1494,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             // Update UI
                             updateDashboardStats();
                             renderRoomMap('viz');
+                            saveState();
                             
                             // Refresh the modal occupants list
                             openMaintenanceModal(roomNum);
@@ -2767,6 +2770,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderRoomMap('allot');
         updateAllotmentButtons();
         updateDashboardStats();
+        saveState();
 
         // Auto-navigate to Report when all registered occupants are allotted rooms
         let allAllotted = true;
@@ -4119,6 +4123,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Update main dashboard stats and save
                 updateDashboardStats();
+                saveState();
             });
 
             const slider = document.createElement('span');
