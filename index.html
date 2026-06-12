@@ -261,7 +261,15 @@
                     <!-- Centre Name -->
                     <div class="form-group">
                         <label class="form-label" for="reg-centre-name">Centre Name</label>
-                        <input type="text" id="reg-centre-name" class="form-input" placeholder="Enter Centre Name (e.g. Delhi, Mumbai)">
+                        <div style="position: relative; width: 100%;">
+                            <input type="text" id="reg-centre-name" class="form-input" placeholder="Enter Centre Name (e.g. Delhi, Mumbai)" style="padding-right: 40px;">
+                            <button type="button" id="btn-centre-dropdown" style="position: absolute; right: 0; top: 0; height: 100%; width: 40px; background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); outline: none;">
+                                <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M7 10l5 5 5-5H7z"/></svg>
+                            </button>
+                            <div id="centre-dropdown-list" class="frosted-glass" style="position: absolute; top: calc(100% + 4px); left: 0; width: 100%; max-height: 200px; overflow-y: auto; background: var(--bg-slate-900); border: var(--border-glow); border-radius: 12px; z-index: 100; display: none; flex-direction: column; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
+                                <!-- Loaded dynamically -->
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Centre Contact Phone -->
@@ -520,6 +528,12 @@
                                 <!-- Populated dynamically based on registration type (e.g. Mata, Kumari, Adhar Kumar...) -->
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Selected Rooms Container -->
+                    <div id="allotment-selected-rooms-container" class="box-container" style="margin-top: 10px; padding: 12px; display: none; align-items: center; gap: 8px; flex-wrap: wrap; border: var(--border-glow); background: rgba(15, 23, 42, 0.02); border-radius: 12px;">
+                        <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">Selected Rooms:</span>
+                        <div id="allotment-selected-rooms-list" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
                     </div>
 
                     <!-- Map Legend -->
@@ -785,48 +799,50 @@
 
             <!-- Modal: Maintenance Toggle / Room Details -->
             <div id="modal-maintenance" class="modal-overlay">
-                <div class="modal-card" style="max-width: 340px;">
+                <div class="modal-card" style="max-width: 480px; width: 92%;">
                     <div class="modal-header">
                         <h3>Room <span id="modal-maint-room-number">-</span> Details</h3>
                         <button class="btn-close" id="btn-close-maint">✕</button>
                     </div>
-                    <div class="modal-body">
+                    <div class="modal-body" style="padding-top: 5px;">
                         <!-- Occupants details grouped by centre -->
-                        <div class="form-group">
+                        <div class="form-group" style="margin-bottom: 0;">
                             <label class="form-label">Current Occupants</label>
-                            <div id="modal-room-occupants" class="box-container" style="margin-bottom: 0; background: var(--bg-slate-900); border: 1px solid rgba(15, 23, 42, 0.08); padding: 12px; font-size: 13px; max-height: 160px; overflow-y: auto;">
+                            <div id="modal-room-occupants" class="box-container" style="margin-bottom: 0; background: var(--bg-slate-900); border: 1px solid rgba(15, 23, 42, 0.08); padding: 12px; font-size: 13px;">
                                 <!-- Dynamically loaded -->
                             </div>
                         </div>
                         
-                        <hr class="form-divider" id="maint-divider" style="margin: 14px 0;">
+                        <hr class="form-divider" id="maint-divider" style="margin: 12px 0;">
 
-                        <div class="form-group" id="maint-checkbox-container">
-                            <label class="checkbox-container-label">
-                                <input type="checkbox" id="maint-checkbox">
-                                <span class="custom-checkbox"></span>
-                                Mark as Unmaintained (Red color)
-                            </label>
+                        <div id="maint-controls-grid" style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 12px; margin-bottom: 12px; align-items: flex-end;">
+                            <div class="form-group" id="maint-checkbox-container" style="margin-bottom: 0; padding-bottom: 8px;">
+                                <label class="checkbox-container-label" style="font-size: 12px;">
+                                    <input type="checkbox" id="maint-checkbox">
+                                    <span class="custom-checkbox"></span>
+                                    Unmaintained
+                                </label>
+                            </div>
+                            <div class="form-group" id="maint-issue-container" style="margin-bottom: 0;">
+                                <label class="form-label" for="maint-issue-select" style="font-size: 11px; margin-bottom: 4px;">Issue Details</label>
+                                <select id="maint-issue-select" class="form-select" style="padding: 8px; font-size: 12px;">
+                                    <option value="">-- Select Issue (Optional) --</option>
+                                    <option value="Electricity Problem">Electricity Problem</option>
+                                    <option value="Maintenance Issue">Maintenance Issue</option>
+                                    <option value="Cleaning Required">Cleaning Required</option>
+                                    <option value="Plumbing Issue">Plumbing Issue</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
                         </div>
-                        <div class="form-group" id="maint-issue-container">
-                            <label class="form-label" for="maint-issue-select">Select Issue Details</label>
-                            <select id="maint-issue-select" class="form-select">
-                                <option value="">-- Select Issue (Optional) --</option>
-                                <option value="Electricity Problem">Electricity Problem</option>
-                                <option value="Maintenance Issue">Maintenance Issue</option>
-                                <option value="Cleaning Required">Cleaning Required</option>
-                                <option value="Plumbing Issue">Plumbing Issue</option>
-                                <option value="Other">Other</option>
-                            </select>
-                        </div>
-                        <button class="btn-large-gradient" id="btn-save-maintenance">Save Status</button>
+                        <button class="btn-large-gradient" id="btn-save-maintenance" style="font-size: 13px; padding: 10px;">Save Status</button>
                     </div>
                 </div>
             </div>
 
             <!-- Modal: Edit / Transfer Occupant -->
             <div id="modal-edit-occupant" class="modal-overlay" style="z-index: 1250;">
-                <div class="modal-card" style="max-width: 340px;">
+                <div class="modal-card" style="max-width: 480px; width: 92%;">
                     <div class="modal-header">
                         <h3 style="font-size: 16px; font-weight: 700; color: #000000; font-family: 'Outfit', sans-serif;">Edit / Transfer Occupant</h3>
                         <button class="btn-close" id="btn-close-edit-occupant">✕</button>
@@ -835,46 +851,59 @@
                         <input type="hidden" id="edit-occupant-room-num">
                         <input type="hidden" id="edit-occupant-idx">
                         
-                        <div class="form-group" style="margin-bottom: 12px;">
-                            <label class="form-label" for="edit-occupant-name" style="font-size: 12px; margin-bottom: 4px;">Name</label>
-                            <input type="text" id="edit-occupant-name" class="form-input" placeholder="e.g. Ramesh Kumar">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label" for="edit-occupant-name" style="font-size: 11px; margin-bottom: 4px;">Name</label>
+                                <input type="text" id="edit-occupant-name" class="form-input" placeholder="e.g. Ramesh Kumar" style="padding: 8px; font-size: 12px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label" for="edit-occupant-subcat" style="font-size: 11px; margin-bottom: 4px;">Subcategory</label>
+                                <select id="edit-occupant-subcat" class="form-select" style="padding: 8px; font-size: 12px;">
+                                    <option value="Mata">Mata</option>
+                                    <option value="Kumari">Kumari</option>
+                                    <option value="BK Teacher">BK Teacher</option>
+                                    <option value="Adhar Kumar">Adhar Kumar</option>
+                                    <option value="Kumar">Kumar</option>
+                                    <option value="Children">Children</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Driver">Driver</option>
+                                </select>
+                            </div>
                         </div>
-                        <div class="form-group" style="margin-bottom: 12px;">
-                            <label class="form-label" for="edit-occupant-subcat" style="font-size: 12px; margin-bottom: 4px;">Subcategory</label>
-                            <select id="edit-occupant-subcat" class="form-select">
-                                <option value="Mata">Mata</option>
-                                <option value="Kumari">Kumari</option>
-                                <option value="BK Teacher">BK Teacher</option>
-                                <option value="Adhar Kumar">Adhar Kumar</option>
-                                <option value="Kumar">Kumar</option>
-                                <option value="Children">Children</option>
-                                <option value="Male">Male</option>
-                                <option value="Female">Female</option>
-                                <option value="Driver">Driver</option>
-                            </select>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label" for="edit-occupant-centre" style="font-size: 11px; margin-bottom: 4px;">Centre</label>
+                                <input type="text" id="edit-occupant-centre" class="form-input" placeholder="e.g. Delhi" style="padding: 8px; font-size: 12px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label" for="edit-occupant-phone" style="font-size: 11px; margin-bottom: 4px;">Phone</label>
+                                <input type="text" id="edit-occupant-phone" class="form-input" placeholder="e.g. 9999999999" style="padding: 8px; font-size: 12px;">
+                            </div>
                         </div>
-                        <div class="form-group" style="margin-bottom: 12px;">
-                            <label class="form-label" for="edit-occupant-centre" style="font-size: 12px; margin-bottom: 4px;">Centre</label>
-                            <input type="text" id="edit-occupant-centre" class="form-input" placeholder="e.g. Delhi">
-                        </div>
-                        <div class="form-group" style="margin-bottom: 12px;">
-                            <label class="form-label" for="edit-occupant-phone" style="font-size: 12px; margin-bottom: 4px;">Phone</label>
-                            <input type="text" id="edit-occupant-phone" class="form-input" placeholder="e.g. 9999999999">
-                        </div>
-                        <div class="form-group" style="margin-bottom: 16px;">
-                            <label class="form-label" for="edit-occupant-dep-date" style="font-size: 12px; margin-bottom: 4px;">Departure Date</label>
-                            <input type="date" id="edit-occupant-dep-date" class="form-input">
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label" for="edit-occupant-dep-date" style="font-size: 11px; margin-bottom: 4px;">Departure Date</label>
+                                <input type="date" id="edit-occupant-dep-date" class="form-input" style="padding: 8px; font-size: 12px;">
+                            </div>
+                            <div style="display: flex; align-items: flex-end;">
+                                <!-- Alignment spacing -->
+                            </div>
                         </div>
                         
-                        <button class="btn-large-gradient" id="btn-save-edit-occupant" style="margin-bottom: 10px; font-size: 13px; padding: 10px;">Save Changes</button>
-                        <button class="btn-large-gradient" id="btn-transfer-edit-occupant" style="background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%); box-shadow: 0 6px 20px rgba(14, 165, 233, 0.4); font-size: 13px; padding: 10px;">Transfer / Re-allot Room</button>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
+                            <button class="btn-large-gradient" id="btn-save-edit-occupant" style="font-size: 12px; padding: 8px; margin: 0; height: 38px;">Save Changes</button>
+                            <button class="btn-large-gradient" id="btn-transfer-edit-occupant" style="background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%); box-shadow: 0 6px 20px rgba(14, 165, 233, 0.4); font-size: 12px; padding: 8px; margin: 0; height: 38px;">Transfer / Re-allot</button>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- Modal: Centre Details Popup -->
             <div id="modal-centre-details" class="modal-overlay">
-                <div class="modal-card" style="max-width: 360px;">
+                <div class="modal-card" style="max-width: 480px; width: 92%;">
                     <div class="modal-header">
                         <h3><span id="modal-centre-name">-</span> Details</h3>
                         <button class="btn-close" id="btn-close-centre-details">✕</button>
@@ -892,7 +921,7 @@
 
             <!-- Modal: Department Details Popup -->
             <div id="modal-dept-details" class="modal-overlay">
-                <div class="modal-card" style="max-width: 360px;">
+                <div class="modal-card" style="max-width: 480px; width: 92%;">
                     <div class="modal-header">
                         <h3><span id="modal-dept-title">-</span> Details</h3>
                         <button class="btn-close" id="btn-close-dept-details">✕</button>

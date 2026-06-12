@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const acRooms = ['219', '213', '306', '203', '207', '214', '216', '217', '218', '319', '215', '315'];
         const geyserRooms = ['203', '207', '214', '216', '217', '218', '306', '319', '220', '404', '219'];
         const pantryRooms = ['208', '304'];
-        const niwasiRooms = ['201', '202', '204', '205', '206', '209', '210', '211', '212', '302', '305', '308', '309', '310', '311'];
+        const niwasiRooms = ['201', '202', '204', '205', '206', '209', '210', '211', '212', '302', '305', '308', '309', '311'];
         const sittingRooms = ['217', '317'];
 
         floors.forEach(floor => {
@@ -215,6 +215,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let isWritingFirebase = false;
     let isFirebaseLoaded = false;
 
+    // Offline-First Sync Variables
+    let hasUnsyncedChanges = localStorage.getItem('has_unsynced_changes') === 'true';
+    let isSyncing = false;
+    let needsAnotherSync = false; // Flag to track if changes were made while syncing
+
     function saveState(syncToFirebase = true) {
         try {
             const dataToSave = {
@@ -230,25 +235,248 @@ document.addEventListener('DOMContentLoaded', () => {
                 viewerPassword: state.viewerPassword
             };
             
-            // Save locally, including local auth role
+            // Save locally immediately to prevent any local data loss
             const localData = { ...dataToSave, currentUserRole: state.currentUserRole };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(localData));
 
             // Sync with Firebase in real time if configured (Admin only)
             const isViewer = state.currentUserRole === 'viewer';
-            if (syncToFirebase && isFirebaseActive && dbRef && isFirebaseLoaded && !isViewer) {
-                isWritingFirebase = true;
-                dbRef.set(dataToSave).then(() => {
-                    isWritingFirebase = false;
-                }).catch(err => {
-                    isWritingFirebase = false;
-                    console.error('Firebase save error:', err);
-                });
+            if (syncToFirebase && isFirebaseActive && dbRef && !isViewer) {
+                if (!isFirebaseLoaded) {
+                    console.warn('⚠️ Firebase active but data not loaded yet. Delaying sync to prevent overwriting database.');
+                    hasUnsyncedChanges = true;
+                    localStorage.setItem('has_unsynced_changes', 'true');
+                    return;
+                }
+                hasUnsyncedChanges = true;
+                localStorage.setItem('has_unsynced_changes', 'true');
+                if (isSyncing) {
+                    needsAnotherSync = true;
+                    console.log('⏳ Firebase sync in progress. Queueing next sync for new changes...');
+                } else {
+                    triggerFirebaseSync(dataToSave);
+                }
             }
         } catch (e) {
             console.warn('Could not save state:', e);
         }
     }
+
+    function triggerFirebaseSync(forcedData = null) {
+        if (isSyncing) return;
+        const isViewer = state.currentUserRole === 'viewer';
+        if (isViewer || !isFirebaseActive || !dbRef) return;
+        
+        // Safety guard to block pushes before initial remote state is loaded
+        if (!isFirebaseLoaded) {
+            console.warn('⚠️ Cannot trigger Firebase sync: database has not loaded initial state yet.');
+            return;
+        }
+
+        const dataToSave = forcedData || {
+            rooms: state.rooms,
+            programmes: state.programmes,
+            pastProgrammes: state.pastProgrammes,
+            registration: state.registration,
+            allotment: {
+                allottedLog: state.allotment.allottedLog
+            },
+            niwasiStatus: state.niwasiStatus,
+            selectedProgrammeId: state.selectedProgramme ? state.selectedProgramme.id : null,
+            viewerPassword: state.viewerPassword
+        };
+
+        isSyncing = true;
+        updateCloudStatus('syncing');
+
+        // Fail-safe sync timeout: if Firebase hangs, mark error so we can retry
+        let syncTimeout = setTimeout(() => {
+            isSyncing = false;
+            hasUnsyncedChanges = true;
+            localStorage.setItem('has_unsynced_changes', 'true');
+            updateCloudStatus('error');
+            console.warn('☁️ Database sync timed out');
+            
+            // If another sync was queued, process it now
+            if (needsAnotherSync) {
+                needsAnotherSync = false;
+                triggerFirebaseSync();
+            }
+        }, 10000);
+
+        isWritingFirebase = true;
+        dbRef.set(dataToSave).then(() => {
+            clearTimeout(syncTimeout);
+            isWritingFirebase = false;
+            isSyncing = false;
+            
+            if (needsAnotherSync) {
+                needsAnotherSync = false;
+                console.log('🔄 Triggering queued sync for subsequent changes...');
+                triggerFirebaseSync();
+            } else {
+                hasUnsyncedChanges = false;
+                localStorage.setItem('has_unsynced_changes', 'false');
+                updateCloudStatus('synced');
+                console.log('☁️ Database sync successful');
+            }
+        }).catch(err => {
+            clearTimeout(syncTimeout);
+            isWritingFirebase = false;
+            isSyncing = false;
+            hasUnsyncedChanges = true;
+            localStorage.setItem('has_unsynced_changes', 'true');
+            updateCloudStatus('error');
+            console.error('☁️ Database sync failed:', err);
+            
+            // If another sync was queued, process it now
+            if (needsAnotherSync) {
+                needsAnotherSync = false;
+                triggerFirebaseSync();
+            }
+        });
+    }
+
+    function initializeCloudIndicators() {
+        const titles = document.querySelectorAll('h1.app-title');
+        titles.forEach((title) => {
+            if (title.parentNode.querySelector('.cloud-sync-indicator')) return;
+            
+            const btn = document.createElement('button');
+            btn.className = 'cloud-sync-indicator synced';
+            btn.type = 'button';
+            btn.title = 'Sync Status';
+            btn.innerHTML = `
+                <svg viewBox="0 0 24 24" width="18" height="18">
+                    <path fill="currentColor" d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/>
+                </svg>
+            `;
+            
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!isFirebaseActive || !dbRef) {
+                    showToast('ℹ️ Firebase is running in local mode');
+                    return;
+                }
+                const isViewer = state.currentUserRole === 'viewer';
+                if (isViewer) {
+                    showToast('🔄 Fetching latest database state...');
+                    dbRef.once('value').then((snapshot) => {
+                        const remoteData = snapshot.val();
+                        if (remoteData) {
+                            applyStateUpdate(remoteData);
+                            try {
+                                localStorage.setItem(STORAGE_KEY, JSON.stringify(remoteData));
+                            } catch (e) {}
+                            refreshUI();
+                            showToast('✅ Latest data fetched from database!');
+                        } else {
+                            showToast('ℹ️ Database is empty');
+                        }
+                    }).catch((err) => {
+                        console.error('Error fetching database state:', err);
+                        showToast('❌ Failed to fetch database state');
+                    });
+                    return;
+                }
+                if (!isFirebaseLoaded) {
+                    showToast('⚠️ Database not loaded yet. Please wait...');
+                    return;
+                }
+                
+                showToast('🔄 Syncing with database...');
+                const localSavedState = localStorage.getItem(STORAGE_KEY);
+                if (localSavedState) {
+                    try {
+                        const localData = JSON.parse(localSavedState);
+                        triggerFirebaseSync(localData);
+                    } catch (err) {
+                        triggerFirebaseSync();
+                    }
+                } else {
+                    triggerFirebaseSync();
+                }
+            });
+            
+            title.parentNode.insertBefore(btn, title.nextSibling);
+        });
+        
+        updateCloudStatus(hasUnsyncedChanges ? 'error' : 'synced');
+    }
+
+    function updateCloudStatus(status) {
+        const indicators = document.querySelectorAll('.cloud-sync-indicator');
+        indicators.forEach(ind => {
+            ind.classList.remove('synced', 'syncing', 'error');
+            ind.classList.add(status);
+            if (status === 'synced') {
+                ind.title = 'Synced with Cloud';
+            } else if (status === 'syncing') {
+                ind.title = 'Syncing... Please wait';
+            } else if (status === 'error') {
+                ind.title = 'Unsynced Changes / Offline. Click to retry sync.';
+            }
+        });
+    }
+
+    // Register Reload Blocker for Unsynced Changes
+    window.addEventListener('beforeunload', (event) => {
+        if (hasUnsyncedChanges) {
+            event.preventDefault();
+            const msg = '⚠️ Unsynced changes exist! Your data will be lost if you refresh. Please wait.';
+            event.returnValue = msg;
+            return msg;
+        }
+    });
+
+    // Register Network State Listeners for Autosync
+    window.addEventListener('online', () => {
+        console.log('🌐 Browser went online');
+        if (hasUnsyncedChanges && isFirebaseActive && dbRef && isFirebaseLoaded) {
+            const isViewer = state.currentUserRole === 'viewer';
+            if (!isViewer) {
+                const localSavedState = localStorage.getItem(STORAGE_KEY);
+                if (localSavedState) {
+                    try {
+                        const localData = JSON.parse(localSavedState);
+                        triggerFirebaseSync(localData);
+                    } catch (err) {
+                        triggerFirebaseSync();
+                    }
+                } else {
+                    triggerFirebaseSync();
+                }
+            }
+        }
+    });
+
+    window.addEventListener('offline', () => {
+        console.log('🌐 Browser went offline');
+        if (hasUnsyncedChanges) {
+            updateCloudStatus('error');
+        }
+    });
+
+    // Periodic check to auto-retry synchronization every 5 seconds
+    setInterval(() => {
+        if (hasUnsyncedChanges && !isSyncing && isFirebaseActive && dbRef && isFirebaseLoaded) {
+            const isViewer = state.currentUserRole === 'viewer';
+            if (!isViewer) {
+                console.log('🔄 Periodic sync timer: Attempting to upload unsynced changes...');
+                const localSavedState = localStorage.getItem(STORAGE_KEY);
+                if (localSavedState) {
+                    try {
+                        const localData = JSON.parse(localSavedState);
+                        triggerFirebaseSync(localData);
+                    } catch (err) {
+                        triggerFirebaseSync();
+                    }
+                } else {
+                    triggerFirebaseSync();
+                }
+            }
+        }
+    }, 5000);
 
     function applyStateUpdate(data) {
         if (!data) return;
@@ -288,14 +516,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Restore selected programme
-        if (data.selectedProgrammeId) {
-            state.selectedProgramme = state.programmes.find(p => p.id === data.selectedProgrammeId) || null;
-        }
+        state.selectedProgramme = data.selectedProgrammeId ? (state.programmes.find(p => p.id === data.selectedProgrammeId) || null) : null;
 
         // Restore viewer password
-        if (data.viewerPassword) {
-            state.viewerPassword = data.viewerPassword;
-        }
+        state.viewerPassword = data.viewerPassword || 'viewer@src';
 
         // Restore current user role (from local storage data)
         if (data.currentUserRole !== undefined) {
@@ -333,6 +557,12 @@ document.addEventListener('DOMContentLoaded', () => {
             updateAllotmentButtons();
         } else if (state.activeScreen === 'screen-seva') {
             renderSevaPersonsList();
+        } else if (state.activeScreen === 'screen-sevadhari-details') {
+            if (activeSevaViewMode === 'centre') {
+                renderSevadhariDetails();
+            } else {
+                renderDeptWiseList();
+            }
         }
     }
 
@@ -348,6 +578,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 dbRef.on('value', (snapshot) => {
                     isFirebaseLoaded = true; // Mark as loaded!
                     if (isWritingFirebase) return; // Prevent loops
+                    
+                    // If we have unsynced local changes, do not let incoming remote data overwrite them.
+                    // Instead, force push our local data to Firebase.
+                    if (hasUnsyncedChanges) {
+                        console.log('⚠️ Ignoring remote data update: Unsynced local changes exist. Triggering sync...');
+                        const localSavedState = localStorage.getItem(STORAGE_KEY);
+                        if (localSavedState) {
+                            try {
+                                const localData = JSON.parse(localSavedState);
+                                triggerFirebaseSync(localData);
+                            } catch (err) {
+                                triggerFirebaseSync();
+                            }
+                        } else {
+                            triggerFirebaseSync();
+                        }
+                        return;
+                    }
+                    
                     const remoteData = snapshot.val();
                     if (remoteData) {
                         applyStateUpdate(remoteData);
@@ -357,6 +606,33 @@ document.addEventListener('DOMContentLoaded', () => {
                         } catch (e) {}
                         refreshUI();
                         console.log('🔄 Remote data synced and UI updated');
+                    }
+                });
+
+                // Monitor connection status
+                firebase.database().ref('.info/connected').on('value', (connectedSnap) => {
+                    if (connectedSnap.val() === true) {
+                        console.log('🔥 Connected to Firebase');
+                        if (hasUnsyncedChanges) {
+                            const localSavedState = localStorage.getItem(STORAGE_KEY);
+                            if (localSavedState) {
+                                try {
+                                    const localData = JSON.parse(localSavedState);
+                                    triggerFirebaseSync(localData);
+                                } catch (err) {
+                                    triggerFirebaseSync();
+                                }
+                            } else {
+                                triggerFirebaseSync();
+                            }
+                        } else {
+                            updateCloudStatus('synced');
+                        }
+                    } else {
+                        console.log('⚠️ Disconnected from Firebase');
+                        if (hasUnsyncedChanges) {
+                            updateCloudStatus('error');
+                        }
                     }
                 });
             } catch (e) {
@@ -370,6 +646,9 @@ document.addEventListener('DOMContentLoaded', () => {
     initRooms();
     loadState(); // Optimistic load: display cached local state immediately
     initFirebase(); // Connect to cloud database and sync if keys are set
+    initializeCloudIndicators(); // Add cloud sync status icon to top menus next to titles
+    initializeCentreAutocomplete(); // Set up Centre autocomplete dropdown logic
+    updateProceedButtonText(); // Initialize proceed button count indicator
     checkExpiredOccupants();
     renderProgrammes();
     renderPastProgrammes();
@@ -993,6 +1272,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderAllotmentSummary();
             renderRoomMap('allot');
             updateAllotmentButtons();
+            updateSelectedRoomsLineUI();
         } else if (screenId === 'screen-seva') {
             renderSevaPersonsList();
         } else if (screenId === 'screen-home') {
@@ -1269,6 +1549,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+            let centreLabelHtml = '';
+            if (room.allocated && room.allocated.length > 0) {
+                const centres = room.allocated.map(p => p.centre).filter(Boolean);
+                const uniqueCentres = [...new Set(centres)];
+                if (uniqueCentres.length === 1) {
+                    const sameCentre = uniqueCentres[0];
+                    if (sameCentre && sameCentre !== '-') {
+                        centreLabelHtml = `<span class="room-centre-label">${sameCentre}</span>`;
+                    }
+                }
+            }
+
             // Render room detail
             roomEl.innerHTML = `
                 ${fullBadgeHtml}
@@ -1277,6 +1569,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ${vipBadgeHtml}
                 ${categoryBadgeHtml}
                 <span class="room-num">${room.number}</span>
+                ${centreLabelHtml}
                 <span class="room-occupancy">${occupancyText}</span>
             `;
 
@@ -1309,10 +1602,6 @@ document.addEventListener('DOMContentLoaded', () => {
             e.currentTarget.classList.add('active');
             activeAllotFloor = e.currentTarget.dataset.floor;
             renderRoomMap('allot');
-            if (state.allotment.selectedRoomNum) {
-                // Refresh room panel
-                selectRoomForAllotment(state.allotment.selectedRoomNum);
-            }
         });
     });
 
@@ -1321,18 +1610,12 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('btn-allot-block-b').classList.remove('active');
         activeAllotBlock = 'A';
         renderRoomMap('allot');
-        if (state.allotment.selectedRoomNum) {
-            selectRoomForAllotment(state.allotment.selectedRoomNum);
-        }
     });
     document.getElementById('btn-allot-block-b').addEventListener('click', (e) => {
         document.getElementById('btn-allot-block-a').classList.remove('active');
         document.getElementById('btn-allot-block-b').classList.add('active');
         activeAllotBlock = 'B';
         renderRoomMap('allot');
-        if (state.allotment.selectedRoomNum) {
-            selectRoomForAllotment(state.allotment.selectedRoomNum);
-        }
     });
 
     document.querySelectorAll('#viz-floor-tabs .floor-tab').forEach(tab => {
@@ -1389,8 +1672,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Show/Hide maintenance editing controls based on role
         const isViewer = state.currentUserRole === 'viewer';
         document.getElementById('maint-divider').style.display = isViewer ? 'none' : 'block';
-        document.getElementById('maint-checkbox-container').style.display = isViewer ? 'none' : 'block';
-        document.getElementById('maint-issue-container').style.display = isViewer ? 'none' : 'block';
+        const controlsGrid = document.getElementById('maint-controls-grid');
+        if (controlsGrid) controlsGrid.style.display = isViewer ? 'none' : 'grid';
         document.getElementById('btn-save-maintenance').style.display = isViewer ? 'none' : 'block';
 
         // Populate current occupants list grouped by centre
@@ -1782,6 +2065,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         handleFormToggleVisibility();
+        updateProceedButtonText();
     }
 
     function setSegmentActive(containerId, value) {
@@ -1900,6 +2184,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateCountersDisplay();
             }
         }
+        updateProceedButtonText();
     }
 
     // Counters interaction (+ / - buttons)
@@ -1963,6 +2248,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateVal('count-nbk-male', counts.nbk_male);
         updateVal('count-nbk-children', counts.nbk_children);
         updateVal('count-nbk-driver', counts.nbk_driver);
+        updateProceedButtonText();
     }
 
     // Individual List Row Management
@@ -2034,6 +2320,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             container.appendChild(row);
         });
+        updateProceedButtonText();
     }
 
     // ----------------------------------------------------
@@ -2442,6 +2729,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('allotment-room-info-panel').classList.add('hidden');
         renderRoomMap('allot');
         updateAllotmentButtons();
+        updateSelectedRoomsLineUI();
     }
 
     function selectRoomForAllotment(roomNum) {
@@ -2513,6 +2801,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 panel.classList.add('hidden');
             }
+            updateSelectedRoomsLineUI();
             return;
         }
 
@@ -2600,6 +2889,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.allotment.tempAllocations.forEach(t => totalPlaced += (t.adultCount + t.childCount));
         let remToAllot = totalIncomingCount - totalPlaced;
         document.getElementById('panel-remaining-count').textContent = remToAllot;
+        updateSelectedRoomsLineUI();
     }
 
     function updateAllotmentButtons() {
@@ -2771,6 +3061,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateAllotmentButtons();
         updateDashboardStats();
         saveState();
+        updateSelectedRoomsLineUI();
 
         // Auto-navigate to Report when all registered occupants are allotted rooms
         let allAllotted = true;
@@ -3603,24 +3894,73 @@ document.addEventListener('DOMContentLoaded', () => {
             listEl.innerHTML = '<div style="color:#64748b; font-style:italic; text-align:center;">No details found.</div>';
         } else {
             keys.forEach(sub => {
-                let roomParts = [];
+                const subRow = document.createElement('div');
+                subRow.style.cssText = `
+                    padding: 10px 0;
+                    border-bottom: 1px solid rgba(15, 23, 42, 0.05);
+                    display: flex;
+                    flex-direction: column;
+                    gap: 6px;
+                `;
+
+                const titleEl = document.createElement('div');
+                titleEl.style.cssText = `
+                    font-size: 14px;
+                    font-weight: 700;
+                    color: var(--text-primary);
+                    font-family: 'Outfit', sans-serif;
+                `;
+                titleEl.textContent = sub;
+                subRow.appendChild(titleEl);
+
+                const pillsContainer = document.createElement('div');
+                pillsContainer.style.cssText = `
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    margin-left: 4px;
+                    margin-top: 2px;
+                `;
+
                 Object.values(grouped[sub]).forEach(info => {
-                    roomParts.push(`${info.count} (Room ${info.room}) [🕒 ${info.arrivalTime}]`);
+                    const pill = document.createElement('div');
+                    pill.className = 'occupant-room-detail-pill';
+                    pill.style.cssText = `
+                        display: inline-flex;
+                        align-items: center;
+                        background: rgba(99, 102, 241, 0.06);
+                        border: 1px solid rgba(99, 102, 241, 0.15);
+                        color: var(--accent-indigo);
+                        padding: 6px 12px;
+                        border-radius: 12px;
+                        font-size: 12px;
+                        font-weight: 700;
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                        font-family: 'Outfit', sans-serif;
+                        box-shadow: 0 1px 3px rgba(99, 102, 241, 0.05);
+                    `;
+                    pill.innerHTML = `${info.count} in Room ${info.room} <span style="font-size:10px; margin-left:6px; opacity:0.8;">🕒</span>`;
+                    
+                    pill.addEventListener('mouseenter', () => {
+                        pill.style.background = 'rgba(99, 102, 241, 0.12)';
+                        pill.style.transform = 'translateY(-1px)';
+                        pill.style.boxShadow = '0 3px 8px rgba(99, 102, 241, 0.15)';
+                    });
+                    pill.addEventListener('mouseleave', () => {
+                        pill.style.background = 'rgba(99, 102, 241, 0.06)';
+                        pill.style.transform = 'translateY(0)';
+                        pill.style.boxShadow = '0 1px 3px rgba(99, 102, 241, 0.05)';
+                    });
+                    pill.addEventListener('click', () => {
+                        alert(`🕒 Arrival Date & Time\n\nCentre: ${centre.name}\nRoom: ${info.room}\nSubcategory: ${sub}\nTime: ${info.arrivalTime}`);
+                    });
+
+                    pillsContainer.appendChild(pill);
                 });
 
-                const row = document.createElement('div');
-                row.style.padding = '8px 0';
-                row.style.borderBottom = '1px solid rgba(15, 23, 42, 0.05)';
-                row.style.display = 'flex';
-                row.style.flexDirection = 'column';
-                row.style.gap = '2px';
-                row.style.fontSize = '14px';
-
-                row.innerHTML = `
-                    <strong style="color:var(--text-primary); font-weight:600;">${sub}:</strong>
-                    <span style="color:var(--text-secondary); font-family:monospace; font-weight:600; font-size:12px; margin-left:8px;">${roomParts.join(', ')}</span>
-                `;
-                listEl.appendChild(row);
+                subRow.appendChild(pillsContainer);
+                listEl.appendChild(subRow);
             });
         }
 
@@ -4295,6 +4635,144 @@ document.addEventListener('DOMContentLoaded', () => {
         if (elOccupiedRooms) elOccupiedRooms.textContent = occupiedRooms;
         if (elTotalBeds) elTotalBeds.textContent = totalBeds;
         if (elOccupiedBeds) elOccupiedBeds.textContent = occupiedBeds;
+    }
+
+    function updateSelectedRoomsLineUI() {
+        const container = document.getElementById('allotment-selected-rooms-container');
+        const list = document.getElementById('allotment-selected-rooms-list');
+        if (!container || !list) return;
+
+        const temps = state.allotment.tempAllocations || [];
+        if (temps.length === 0) {
+            container.style.display = 'none';
+            list.innerHTML = '';
+            return;
+        }
+
+        container.style.display = 'flex';
+        list.innerHTML = '';
+
+        temps.forEach(temp => {
+            const pill = document.createElement('span');
+            pill.className = 'selected-room-pill';
+            pill.innerHTML = `Room ${temp.roomNum} (${temp.adultCount + temp.childCount}) <span>&times;</span>`;
+            
+            pill.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectRoomForAllotment(temp.roomNum);
+            });
+            list.appendChild(pill);
+        });
+    }
+
+    function updateProceedButtonText() {
+        const btn = document.getElementById('btn-proceed-allotment');
+        if (!btn) return;
+
+        let total = 0;
+        if (state.registration.mode === 'individual') {
+            total = state.registration.individuals ? state.registration.individuals.length : 0;
+        } else {
+            const counts = state.registration.counts;
+            if (counts) {
+                total = (counts.mata || 0) + (counts.kumari || 0) + (counts.teacher || 0) + (counts.children || 0) +
+                        (counts.adhar_kumar || 0) + (counts.kumar || 0) + (counts.nbk_female || 0) +
+                        (counts.nbk_male || 0) + (counts.nbk_children || 0) + (counts.nbk_driver || 0);
+            }
+        }
+
+        if (total > 0) {
+            btn.textContent = `Allot Room (${total})`;
+        } else {
+            btn.textContent = `Allot Room`;
+        }
+    }
+
+    function getCentreNamesForActiveProgramme() {
+        const progId = state.selectedProgramme ? state.selectedProgramme.id : 'monthly';
+        const centres = new Set();
+        Object.values(state.rooms).forEach(room => {
+            if (room.allocated) {
+                room.allocated.forEach(p => {
+                    const pProgId = p.programmeId || 'monthly';
+                    if (pProgId === progId && p.centre) {
+                        const trimmed = p.centre.trim();
+                        if (trimmed && trimmed !== '-') {
+                            centres.add(trimmed);
+                        }
+                    }
+                });
+            }
+        });
+        return Array.from(centres).sort((a, b) => a.localeCompare(b));
+    }
+
+    function initializeCentreAutocomplete() {
+        const input = document.getElementById('reg-centre-name');
+        const list = document.getElementById('centre-dropdown-list');
+        const btn = document.getElementById('btn-centre-dropdown');
+        if (!input || !list || !btn) return;
+
+        // Populate and filter dropdown on typing
+        input.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            const centres = getCentreNamesForActiveProgramme();
+            const filtered = centres.filter(c => c.toLowerCase().includes(query));
+            
+            if (filtered.length === 0) {
+                list.style.display = 'none';
+                return;
+            }
+            
+            list.innerHTML = '';
+            list.style.display = 'flex';
+            filtered.forEach(centre => {
+                const item = document.createElement('div');
+                item.className = 'centre-dropdown-item';
+                item.textContent = centre;
+                item.addEventListener('click', () => {
+                    input.value = centre;
+                    list.style.display = 'none';
+                });
+                list.appendChild(item);
+            });
+        });
+
+        // Toggle dropdown on button click
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isHidden = list.style.display === 'none' || list.style.display === '';
+            if (isHidden) {
+                const centres = getCentreNamesForActiveProgramme();
+                if (centres.length === 0) {
+                    showToast('ℹ️ No centres registered yet for this programme');
+                    list.style.display = 'none';
+                    return;
+                }
+                
+                list.innerHTML = '';
+                centres.forEach(centre => {
+                    const item = document.createElement('div');
+                    item.className = 'centre-dropdown-item';
+                    item.textContent = centre;
+                    item.addEventListener('click', () => {
+                        input.value = centre;
+                        list.style.display = 'none';
+                    });
+                    list.appendChild(item);
+                });
+                list.style.display = 'flex';
+            } else {
+                list.style.display = 'none';
+            }
+        });
+
+        // Hide list when clicking outside
+        document.addEventListener('click', (e) => {
+            if (list.style.display !== 'none' && !e.target.closest('#btn-centre-dropdown') && !e.target.closest('#reg-centre-name')) {
+                list.style.display = 'none';
+            }
+        });
     }
 
     function showToast(message) {
