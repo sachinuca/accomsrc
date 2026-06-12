@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const acRooms = ['219', '213', '306', '203', '207', '214', '216', '217', '218', '319', '215', '315'];
         const geyserRooms = ['203', '207', '214', '216', '217', '218', '306', '319', '220', '404', '219'];
         const pantryRooms = ['208', '304'];
-        const niwasiRooms = ['201', '202', '205', '206', '209', '210', '211', '212', '302', '305', '308', '309', '310', '311'];
+        const niwasiRooms = ['201', '202', '204', '205', '206', '209', '210', '211', '212', '302', '305', '308', '309', '310', '311'];
         const sittingRooms = ['217', '317'];
 
         floors.forEach(floor => {
@@ -104,8 +104,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const evenA = [2, 4, 6, 8, 10, 12];
 
             // Block B rooms
-            // Odd numbers: 13, 15, 17, 19, 21, 23
-            const oddB = [13, 15, 17, 19, 21, 23];
+            // Odd numbers: 13, 15, 17, 19, 21, 23, 25
+            const oddB = [13, 15, 17, 19, 21, 23, 25];
             // Even numbers: 14, 16, 18, 20, 22, 24
             const evenB = [14, 16, 18, 20, 22, 24];
 
@@ -116,7 +116,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (floor === 'D' && num > 2) return;
                 
                 let cap = 5;
-                if (roomNum === '219') {
+                if (roomNum === 'D1') {
+                    cap = 9;
+                } else if (roomNum === 'D2') {
+                    cap = 8;
+                } else if (roomNum === '219') {
                     cap = 2;
                 } else if (cap4Rooms.includes(roomNum)) {
                     cap = 4;
@@ -147,8 +151,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Set a few default unmaintained rooms for demo
-        state.rooms['204'].unmaintained = true;
-        state.rooms['204'].maintenanceIssue = 'Electricity Problem';
+        state.rooms['222'].unmaintained = true;
+        state.rooms['222'].maintenanceIssue = 'Electricity Problem';
         state.rooms['306'].unmaintained = true;
         state.rooms['306'].maintenanceIssue = 'Maintenance Issue';
     }
