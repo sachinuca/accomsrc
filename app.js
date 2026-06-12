@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Active registration form state
         registration: {
+            programmeId: '',
             centreName: '',
             centrePhone: '',
             arrivalTime: '',
@@ -392,32 +393,62 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Resolve names map for Ruhani Seva
+        const finishingProgId = state.selectedProgramme.id;
+        
+        // Resolve names map and create snapshot of room occupancy details dynamically from actual occupants belonging to this programme
         let resolvedNamesMap = {};
-        const reg = state.registration;
-        if (reg.mode === 'group') {
-            const categories = ['mata', 'kumari', 'children', 'adhar_kumar', 'kumar'];
-            const labels = { mata: 'Mata', kumari: 'Kumari', children: 'Children', adhar_kumar: 'Adhar Kumar', kumar: 'Kumar' };
-            categories.forEach(cat => {
-                const count = reg.counts[cat];
-                for (let i = 1; i <= count; i++) {
-                    resolvedNamesMap[`grp_${cat}_${i}`] = `${labels[cat]} #${i}`;
-                }
-            });
-        } else {
-            reg.individuals.forEach(p => {
-                resolvedNamesMap[p.id] = p.name;
-            });
-        }
-
-        // Create a snapshot of current rooms occupancy and occupant details
         const roomsSnapshot = {};
+        const dynamicAllottedLog = [];
+
         Object.keys(state.rooms).forEach(roomNum => {
             const room = state.rooms[roomNum];
             if (room.allocated && room.allocated.length > 0) {
-                roomsSnapshot[roomNum] = JSON.parse(JSON.stringify(room.allocated));
+                const progOccupants = room.allocated.filter(p => (p.programmeId || 'monthly') === finishingProgId);
+                if (progOccupants.length > 0) {
+                    roomsSnapshot[roomNum] = JSON.parse(JSON.stringify(progOccupants));
+                    
+                    // Populate names map and dynamic allotment log
+                    progOccupants.forEach(p => {
+                        if (p.id) {
+                            resolvedNamesMap[p.id] = p.name || p.subcategory;
+                        }
+                        
+                        const existingLog = dynamicAllottedLog.find(l => l.category === p.subcategory && l.room === roomNum);
+                        if (existingLog) {
+                            existingLog.count++;
+                        } else {
+                            dynamicAllottedLog.push({
+                                category: p.subcategory,
+                                room: roomNum,
+                                count: 1
+                            });
+                        }
+                    });
+                }
             }
         });
+
+        // Extract centreName, arrivalTime, and sevaAllocations dynamically from roomsSnapshot
+        let archivedCentreName = '-';
+        let archivedArrivalTime = '-';
+        let archivedSevaAllocations = {};
+        
+        Object.values(roomsSnapshot).forEach(occupants => {
+            occupants.forEach(p => {
+                if (archivedCentreName === '-' && p.centre) {
+                    archivedCentreName = p.centre;
+                }
+                if (archivedArrivalTime === '-' && p.arrivalTime) {
+                    archivedArrivalTime = p.arrivalTime;
+                }
+                if (p.type === 'sevadhari' && p.duty) {
+                    archivedSevaAllocations[p.id] = p.duty;
+                }
+            });
+        });
+        if (archivedCentreName === '-') archivedCentreName = state.registration.centreName || '-';
+        if (archivedArrivalTime === '-') archivedArrivalTime = state.registration.arrivalTime || getCurrentFormattedDateTime();
+        if (Object.keys(archivedSevaAllocations).length === 0) archivedSevaAllocations = { ...state.registration.sevaAllocations };
 
         // Save to past programmes list
         const pastProg = {
@@ -426,10 +457,10 @@ document.addEventListener('DOMContentLoaded', () => {
             date: state.selectedProgramme.date,
             type: state.selectedProgramme.type,
             finishDate: new Date().toLocaleDateString('en-IN'),
-            centreName: state.registration.centreName,
-            arrivalTime: state.registration.arrivalTime || getCurrentFormattedDateTime(),
-            allottedLog: [...state.allotment.allottedLog],
-            sevaAllocations: { ...state.registration.sevaAllocations },
+            centreName: archivedCentreName,
+            arrivalTime: archivedArrivalTime,
+            allottedLog: dynamicAllottedLog,
+            sevaAllocations: archivedSevaAllocations,
             resolvedNamesMap: resolvedNamesMap,
             roomsSnapshot: roomsSnapshot
         };
@@ -444,11 +475,26 @@ document.addEventListener('DOMContentLoaded', () => {
             state.programmes = state.programmes.filter(p => p.id !== state.selectedProgramme.id);
         }
 
-        // Clear all room allocations!
+        // Clear room allocations ONLY for this programme!
         Object.values(state.rooms).forEach(room => {
-            room.occupied = 0;
-            room.gender = null;
-            room.allocated = [];
+            if (room.allocated && room.allocated.length > 0) {
+                // Keep only occupants belonging to other programmes
+                room.allocated = room.allocated.filter(p => (p.programmeId || 'monthly') !== finishingProgId);
+                
+                // Recalculate room occupancy beds and gender
+                const adults = room.allocated.filter(p => p.subcategory !== 'Children');
+                room.occupied = adults.length;
+
+                if (adults.length === 0) {
+                    room.gender = null;
+                } else {
+                    const hasFemale = adults.some(p => ['Mata', 'Kumari', 'Female', 'BK Teacher'].includes(p.subcategory));
+                    const hasMale = adults.some(p => ['Adhar Kumar', 'Kumar', 'Male', 'Driver'].includes(p.subcategory));
+                    if (hasFemale) room.gender = 'female';
+                    else if (hasMale) room.gender = 'male';
+                    else room.gender = null;
+                }
+            }
         });
 
         // Reset active registration form
@@ -488,16 +534,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Report Stats click handlers to open details popup
     document.getElementById('btn-report-stat-total').addEventListener('click', () => {
-        openSummaryDetailsModal('total', state.showingReportIsPast, state.showingReportPastProg);
+        openSummaryDetailsModal('total', state.showingReportIsPast, state.showingReportPastProg, true);
     });
     document.getElementById('btn-report-stat-guests').addEventListener('click', () => {
-        openSummaryDetailsModal('guest', state.showingReportIsPast, state.showingReportPastProg);
+        openSummaryDetailsModal('guest', state.showingReportIsPast, state.showingReportPastProg, true);
     });
     document.getElementById('btn-report-stat-sevadharis').addEventListener('click', () => {
-        openSummaryDetailsModal('sevadhari', state.showingReportIsPast, state.showingReportPastProg);
+        openSummaryDetailsModal('sevadhari', state.showingReportIsPast, state.showingReportPastProg, true);
     });
     document.getElementById('btn-report-stat-nbks').addEventListener('click', () => {
-        openSummaryDetailsModal('nbk', state.showingReportIsPast, state.showingReportPastProg);
+        openSummaryDetailsModal('nbk', state.showingReportIsPast, state.showingReportPastProg, true);
     });
 
     function matchesLabel(p, label) {
@@ -649,7 +695,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function openSummaryDetailsModal(type, isPast = false, pastProg = null) {
+    function openSummaryDetailsModal(type, isPast = false, pastProg = null, filterActiveProg = false) {
         const modal = document.getElementById('modal-occupant-summary-details');
         const titleEl = document.getElementById('modal-summary-title');
         const contentEl = document.getElementById('modal-summary-details-content');
@@ -671,10 +717,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             });
         } else {
+            const currentProgId = state.selectedProgramme ? state.selectedProgramme.id : 'monthly';
             Object.keys(state.rooms).forEach(roomNum => {
                 const occupants = state.rooms[roomNum].allocated || [];
                 occupants.forEach(p => {
-                    allocatedArray.push({ ...p, roomNum: roomNum });
+                    if (!filterActiveProg || (p.programmeId || 'monthly') === currentProgId) {
+                        allocatedArray.push({ ...p, roomNum: roomNum });
+                    }
                 });
             });
         }
@@ -1003,6 +1052,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.selectedProgramme = prog;
                 document.getElementById('chooser-modal-title').textContent = prog.name;
                 document.getElementById('modal-action-chooser').classList.add('active');
+                saveState();
             });
 
             container.appendChild(card);
@@ -1192,12 +1242,26 @@ document.addEventListener('DOMContentLoaded', () => {
             let occupancyText = room.pantry ? 'Pantry Room' : (room.niwasi ? 'Src Niwasi' : `${room.occupied}/${room.capacity} beds`);
             let geyserBadgeHtml = room.geyser ? `<span class="room-geyser-badge">Geyser <svg viewBox="0 0 24 24" width="8" height="8" style="vertical-align: middle; fill: currentColor; margin-left: 2px;"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg></span>` : '';
 
+            let categoryBadgeHtml = '';
+            if (room.allocated && room.allocated.length > 0) {
+                const subcats = room.allocated.map(p => p.subcategory);
+                const uniqueSubcats = [...new Set(subcats)];
+                if (uniqueSubcats.length === 1) {
+                    const sameSubcat = uniqueSubcats[0];
+                    if (sameSubcat) {
+                        const offsetClass = room.vip ? 'with-vip' : '';
+                        categoryBadgeHtml = `<span class="room-cat-tag ${offsetClass}">${sameSubcat}</span>`;
+                    }
+                }
+            }
+
             // Render room detail
             roomEl.innerHTML = `
                 ${fullBadgeHtml}
                 ${acBadgeHtml}
                 ${geyserBadgeHtml}
                 ${vipBadgeHtml}
+                ${categoryBadgeHtml}
                 <span class="room-num">${room.number}</span>
                 <span class="room-occupancy">${occupancyText}</span>
             `;
@@ -1513,6 +1577,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Set up registration state with occupant details
         state.registration = {
+            programmeId: occupant.programmeId || (state.selectedProgramme ? state.selectedProgramme.id : 'monthly'),
             mode: 'individual',
             category: occupant.category || 'bk',
             type: occupant.type || 'guest',
@@ -1586,6 +1651,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('modal-action-chooser').classList.remove('active');
         // Pre-fill / reset form state
         resetRegistrationForm();
+        state.registration.programmeId = state.selectedProgramme ? state.selectedProgramme.id : 'monthly';
         navigateTo('screen-register');
     });
 
@@ -1631,6 +1697,8 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         state.registration.individuals = [];
         state.registration.sevaAllocations = {};
+        state.registration.programmeId = '';
+        state.allotment.cameFromSevadhariDetails = false;
         
         // Reset counters display
         updateCountersDisplay();
@@ -1640,6 +1708,19 @@ document.addEventListener('DOMContentLoaded', () => {
         setSegmentActive('toggle-group-individual', 'group');
         setSegmentActive('toggle-bk-nbk', 'bk');
         setSegmentActive('toggle-guest-sevadhari', 'guest');
+        
+        // Update state properties in memory to match visual defaults
+        state.registration.mode = 'group';
+        state.registration.category = 'bk';
+        state.registration.type = 'guest';
+
+        // Update the second button text and data-value of Type toggle visually
+        const typeContainer = document.getElementById('toggle-guest-sevadhari');
+        const secondTypeBtn = typeContainer ? typeContainer.querySelector('button:nth-child(2)') : null;
+        if (secondTypeBtn) {
+            secondTypeBtn.dataset.value = 'sevadhari';
+            secondTypeBtn.textContent = 'Sevadhari';
+        }
         
         handleFormToggleVisibility();
     }
@@ -1932,7 +2013,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (mode === 'group') {
             const counts = state.registration.counts;
             if (category === 'bk') {
-                totalRegistered = counts.mata + counts.kumari + counts.children + counts.adhar_kumar + counts.kumar;
+                totalRegistered = counts.mata + counts.kumari + counts.teacher + counts.children + counts.adhar_kumar + counts.kumar;
             } else {
                 if (type === 'driver') {
                     totalRegistered = counts.nbk_driver;
@@ -2002,6 +2083,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.allotment.tempAllocations = [];
         state.allotment.selectedCategories = [];
         state.allotment.selectedRoomNum = null;
+        state.allotment.sessionAllottedOccupants = [];
     }
 
     // ----------------------------------------------------
@@ -2016,8 +2098,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (reg.mode === 'group') {
             // Unpack category counts into individual checkable list items
-            const categories = ['mata', 'kumari', 'children', 'adhar_kumar', 'kumar'];
-            const labels = { mata: 'Mata', kumari: 'Kumari', children: 'Children', adhar_kumar: 'Adhar Kumar', kumar: 'Kumar' };
+            const categories = ['mata', 'kumari', 'teacher', 'children', 'adhar_kumar', 'kumar'];
+            const labels = { mata: 'Mata', kumari: 'Kumari', teacher: 'BK Teacher', children: 'Children', adhar_kumar: 'Adhar Kumar', kumar: 'Kumar' };
             
             categories.forEach(cat => {
                 const count = reg.counts[cat];
@@ -2073,24 +2155,159 @@ document.addEventListener('DOMContentLoaded', () => {
         checkboxes.forEach(chk => {
             const id = chk.dataset.id;
             state.registration.sevaAllocations[id] = department;
+
+            // Also search currently checked-in occupants and assign duty!
+            Object.values(state.rooms).forEach(room => {
+                room.allocated.forEach(p => {
+                    if (p.id === id) {
+                        p.duty = department;
+                    }
+                });
+            });
         });
 
+        saveState();
         renderSevaPersonsList();
     });
 
     document.getElementById('btn-proceed-from-seva-to-allotment').addEventListener('click', () => {
-        navigateTo('screen-allotment');
+        if (state.allotment.cameFromSevadhariDetails) {
+            state.allotment.cameFromSevadhariDetails = false;
+            navigateTo('screen-sevadhari-details');
+        } else {
+            navigateTo('screen-allotment');
+        }
     });
 
     // ----------------------------------------------------
     // ROOM ALLOTMENT SCREEN LOGIC
     // ----------------------------------------------------
+    function updateActiveAllotTabsUI() {
+        document.querySelectorAll('#allot-floor-tabs .floor-tab').forEach(t => {
+            if (t.dataset.floor === activeAllotFloor) {
+                t.classList.add('active');
+            } else {
+                t.classList.remove('active');
+            }
+        });
+        if (activeAllotBlock === 'A') {
+            const btnA = document.getElementById('btn-allot-block-a');
+            const btnB = document.getElementById('btn-allot-block-b');
+            if (btnA) btnA.classList.add('active');
+            if (btnB) btnB.classList.remove('active');
+        } else {
+            const btnA = document.getElementById('btn-allot-block-a');
+            const btnB = document.getElementById('btn-allot-block-b');
+            if (btnA) btnA.classList.remove('active');
+            if (btnB) btnB.classList.add('active');
+        }
+    }
+
+    function autoSelectFloorAndBlockForCategories(cat) {
+        if (!cat) return;
+        const R = state.allotment.remainingToAllot[cat] || 0;
+        if (R <= 0) return;
+
+        const femaleCategories = ['Mata', 'Kumari', 'Female', 'BK Teacher'];
+        const maleCategories = ['Adhar Kumar', 'Kumar', 'Male', 'Driver'];
+        const isFemale = femaleCategories.includes(cat);
+        const isMale = maleCategories.includes(cat);
+
+        // Helper to check room compatibility
+        function isRoomCompatible(room) {
+            if (room.unmaintained || room.pantry || room.niwasi) return false;
+            if (isFemale && room.gender && room.gender !== 'female') return false;
+            if (isMale && room.gender && room.gender !== 'male') return false;
+            return true;
+        }
+
+        // 1. Exact vacant match check
+        let bestFloor = null;
+        let bestBlock = null;
+
+        for (const room of Object.values(state.rooms)) {
+            if (isRoomCompatible(room)) {
+                const vacant = room.capacity - room.occupied;
+                if (vacant === R) {
+                    bestFloor = room.floor;
+                    bestBlock = room.block;
+                    break;
+                }
+            }
+        }
+
+        // 2. Fallback: Maximum checked-in occupants of same category
+        if (!bestFloor) {
+            // Let's count by floor & block
+            const candidates = {}; // Key: "floor-block", Value: { floor, block, count }
+            
+            // Initialize candidates for all floor/block combinations that have at least one vacant compatible room
+            Object.values(state.rooms).forEach(room => {
+                if (isRoomCompatible(room)) {
+                    const vacant = room.capacity - room.occupied;
+                    if (vacant > 0) {
+                        const key = `${room.floor}-${room.block}`;
+                        if (!candidates[key]) {
+                            candidates[key] = {
+                                floor: room.floor,
+                                block: room.block,
+                                count: 0
+                            };
+                        }
+                    }
+                }
+            });
+
+            // Count existing occupants of category 'cat' in all rooms and add to candidate counts
+            Object.values(state.rooms).forEach(room => {
+                const key = `${room.floor}-${room.block}`;
+                if (candidates[key]) {
+                    const countInRoom = room.allocated.filter(p => p.subcategory === cat).length;
+                    candidates[key].count += countInRoom;
+                }
+            });
+
+            // Find the candidate with the highest count
+            let maxCount = -1;
+            let bestCandidate = null;
+            Object.values(candidates).forEach(cand => {
+                if (cand.count > maxCount) {
+                    maxCount = cand.count;
+                    bestCandidate = cand;
+                }
+            });
+
+            if (bestCandidate) {
+                bestFloor = bestCandidate.floor;
+                bestBlock = bestCandidate.block;
+            }
+        }
+
+        if (bestFloor) {
+            activeAllotFloor = bestFloor;
+            activeAllotBlock = bestBlock || 'A';
+            
+            // Update UI tabs and render room map
+            updateActiveAllotTabsUI();
+            renderRoomMap('allot');
+        }
+    }
+
     function renderAllotmentSummary() {
         const summaryContainer = document.getElementById('allotment-counts-summary-container');
         summaryContainer.innerHTML = '';
 
         const rem = state.allotment.remainingToAllot;
         const initial = state.allotment.initialCounts;
+
+        // Auto-select category if exactly one remains to be placed and none are currently selected
+        const remainingCats = Object.keys(rem).filter(cat => (rem[cat] || 0) > 0);
+        if (remainingCats.length === 1 && state.allotment.selectedCategories.length === 0) {
+            const autoCat = remainingCats[0];
+            state.allotment.selectedCategories = [autoCat];
+            // Auto focus floor and block for this category
+            autoSelectFloorAndBlockForCategories(autoCat);
+        }
 
         Object.keys(initial).forEach(cat => {
             const remCount = rem[cat] || 0;
@@ -2126,6 +2343,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const category = e.target.dataset.cat;
                     if (e.target.checked) {
                         state.allotment.selectedCategories.push(category);
+                        autoSelectFloorAndBlockForCategories(category);
                     } else {
                         state.allotment.selectedCategories = state.allotment.selectedCategories.filter(c => c !== category);
                     }
@@ -2444,7 +2662,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                             phoneVal = state.registration.centrePhone || '';
                         }
-                        room.allocated.push({
+                        const newOcc = {
                             id: idVal,
                             name: nameVal,
                             phone: phoneVal,
@@ -2453,8 +2671,16 @@ document.addEventListener('DOMContentLoaded', () => {
                             subcategory: cat,
                             centre: state.registration.centreName,
                             departureDate: state.registration.departureDate || null,
-                            arrivalTime: state.registration.arrivalTime || getCurrentFormattedDateTime()
-                        });
+                            arrivalTime: state.registration.arrivalTime || getCurrentFormattedDateTime(),
+                            programmeId: state.registration.programmeId || (state.selectedProgramme ? state.selectedProgramme.id : 'monthly'),
+                            duty: state.registration.sevaAllocations[idVal] || null,
+                            roomNum: temp.roomNum
+                        };
+                        room.allocated.push(newOcc);
+                        if (!state.allotment.sessionAllottedOccupants) {
+                            state.allotment.sessionAllottedOccupants = [];
+                        }
+                        state.allotment.sessionAllottedOccupants.push(newOcc);
                     }
 
                     // Decrement remaining to allot
@@ -2486,7 +2712,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (val > 0) allAllotted = false;
         });
         if (allAllotted && Object.keys(state.allotment.remainingToAllot).length > 0) {
-            generateReportView();
+            generateReportView(false, null, true);
             navigateTo('screen-report');
         }
     });
@@ -2495,11 +2721,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // PRINT REPORT SCREEN LOGIC
     // ----------------------------------------------------
     document.getElementById('btn-print-report-trigger').addEventListener('click', () => {
-        generateReportView();
+        generateReportView(false, null, true);
         navigateTo('screen-report');
     });
 
-    function generateReportView(isPast = false, pastProg = null) {
+    function generateReportView(isPast = false, pastProg = null, isReceipt = false) {
         // Meta details
         let progName, centre, date, allottedLog, sevaAllocations, arrivalTime;
         
@@ -2515,8 +2741,22 @@ document.addEventListener('DOMContentLoaded', () => {
             centre = state.registration.centreName || '-';
             date = new Date().toLocaleDateString('en-IN');
             allottedLog = state.allotment.allottedLog || [];
-            sevaAllocations = state.registration.sevaAllocations || {};
             arrivalTime = state.registration.arrivalTime || getCurrentFormattedDateTime();
+            
+            // Build sevaAllocations dynamically from room occupants of this programme!
+            const currentProgId = state.selectedProgramme ? state.selectedProgramme.id : 'monthly';
+            sevaAllocations = {};
+            Object.values(state.rooms).forEach(room => {
+                room.allocated.forEach(p => {
+                    if ((p.programmeId || 'monthly') === currentProgId && p.type === 'sevadhari' && p.duty) {
+                        sevaAllocations[p.id] = p.duty;
+                    }
+                });
+            });
+            // If empty, fall back to current registration sevaAllocations
+            if (Object.keys(sevaAllocations).length === 0) {
+                sevaAllocations = state.registration.sevaAllocations || {};
+            }
         }
 
         document.getElementById('report-prog-name').textContent = progName;
@@ -2544,10 +2784,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             });
         } else {
+            const currentProgId = state.selectedProgramme ? state.selectedProgramme.id : 'monthly';
             Object.keys(state.rooms).forEach(roomNum => {
                 const occupants = state.rooms[roomNum].allocated || [];
                 occupants.forEach(p => {
-                    allocatedArray.push({ ...p, roomNum: roomNum });
+                    if ((p.programmeId || 'monthly') === currentProgId) {
+                        allocatedArray.push({ ...p, roomNum: roomNum });
+                    }
                 });
             });
         }
@@ -2577,31 +2820,103 @@ document.addEventListener('DOMContentLoaded', () => {
         state.showingReportIsPast = isPast;
         state.showingReportPastProg = pastProg;
 
-        // Room allotments lists formatting: Mata(5)=301
-        // Let's group allotments by category
-        let grouped = {};
-        allottedLog.forEach(log => {
-            if (!grouped[log.category]) grouped[log.category] = {};
-            grouped[log.category][log.room] = (grouped[log.category][log.room] || 0) + log.count;
-        });
+        // Group occupants by room number for the slip/allotment view
+        let roomsGrouped = {}; // { '301': [occupant1, occupant2] }
+        
+        if (isReceipt) {
+            // Receipt mode: use occupants allotted in this session
+            const sessionOccupants = state.allotment.sessionAllottedOccupants || [];
+            if (sessionOccupants.length > 0) {
+                sessionOccupants.forEach(occ => {
+                    if (!roomsGrouped[occ.roomNum]) roomsGrouped[occ.roomNum] = [];
+                    roomsGrouped[occ.roomNum].push(occ);
+                });
+            } else {
+                // Fallback: build from allottedLog
+                const logsToUse = state.allotment.allottedLog || [];
+                logsToUse.forEach(log => {
+                    if (!roomsGrouped[log.room]) roomsGrouped[log.room] = [];
+                    for (let i = 0; i < log.count; i++) {
+                        roomsGrouped[log.room].push({
+                            name: null,
+                            subcategory: log.category
+                        });
+                    }
+                });
+            }
+        } else if (isPast && pastProg) {
+            // Past programme: rebuild from pastProg allottedLog
+            const logsToUse = pastProg.allottedLog || [];
+            logsToUse.forEach(log => {
+                if (!roomsGrouped[log.room]) roomsGrouped[log.room] = [];
+                for (let i = 0; i < log.count; i++) {
+                    roomsGrouped[log.room].push({
+                        name: null,
+                        subcategory: log.category
+                    });
+                }
+            });
+        } else {
+            // Active programme report: use all occupants belonging to this programme
+            allocatedArray.forEach(p => {
+                if (!roomsGrouped[p.roomNum]) roomsGrouped[p.roomNum] = [];
+                roomsGrouped[p.roomNum].push(p);
+            });
+        }
 
         const listContainer = document.getElementById('report-room-allotments-list');
         listContainer.innerHTML = '';
 
-        Object.keys(grouped).forEach(cat => {
-            Object.keys(grouped[cat]).forEach(room => {
-                const count = grouped[cat][room];
-                const row = document.createElement('div');
+        let totalAllotmentsCount = 0;
+        const roomNumbers = Object.keys(roomsGrouped).sort();
+
+        roomNumbers.forEach(roomNum => {
+            const occList = roomsGrouped[roomNum];
+            totalAllotmentsCount += occList.length;
+
+            let hasIndividualNames = false;
+            if (isReceipt) {
+                hasIndividualNames = (state.registration.mode === 'individual');
+            } else if (isPast && pastProg) {
+                hasIndividualNames = occList.some(o => o.name && !o.id.startsWith('grp_'));
+            } else {
+                hasIndividualNames = occList.some(o => o.name && !o.id.startsWith('grp_'));
+            }
+
+            const names = occList.map(o => o.name).filter(n => n && n.trim() !== '');
+
+            let displayString = '';
+            if (hasIndividualNames && names.length > 0) {
+                // Individual mode: bk subhash, bk ram, bk shayam (3) = 301
+                displayString = `${names.join(', ')} (${occList.length}) = ${roomNum}`;
+            } else {
+                // Group mode: bk teacher (4) = 303 or mixed: Mata (2), Kumari (1) = 301
+                let subcatCounts = {};
+                occList.forEach(o => {
+                    subcatCounts[o.subcategory] = (subcatCounts[o.subcategory] || 0) + 1;
+                });
+                const subcatStrings = Object.keys(subcatCounts).map(sub => `${sub} (${subcatCounts[sub]})`);
+                displayString = `${subcatStrings.join(', ')} = ${roomNum}`;
+            }
+
+            const row = document.createElement('div');
+            if (isReceipt) {
+                row.className = 'receipt-row';
+                row.style.fontSize = '20px';
+                row.style.fontWeight = '800';
+                row.style.padding = '12px 0';
+                row.style.borderBottom = '1.5px dashed #cbd5e1';
+                row.style.color = '#1e1b4b';
+                row.style.lineHeight = '1.4';
+                row.innerHTML = `<span class="value" style="width:100%; display:block; text-align:center;">${displayString}</span>`;
+            } else {
                 row.className = 'report-row';
-                row.innerHTML = `
-                    <span class="label">${cat} (${count})</span>
-                    <span class="value">Room ${room}</span>
-                `;
-                listContainer.appendChild(row);
-            });
+                row.innerHTML = `<span class="value" style="font-size:14px; font-weight:700;">${displayString}</span>`;
+            }
+            listContainer.appendChild(row);
         });
 
-        if (allottedLog.length === 0) {
+        if (totalAllotmentsCount === 0) {
             listContainer.innerHTML = '<p style="text-align:center; color:#64748b;">No allocations recorded yet.</p>';
         }
 
@@ -2690,30 +3005,33 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         } else {
             // Active rooms source
+            const currentProgId = state.selectedProgramme ? state.selectedProgramme.id : 'monthly';
             Object.values(state.rooms).forEach(room => {
                 room.allocated.forEach(p => {
-                    let centre = p.centre || 'Unknown';
-                    let cat = p.category; // 'bk' | 'nbk'
-                    let type = p.type; // 'guest' | 'sevadhari' | 'driver'
-                    let sub = p.subcategory; // 'Mata', 'Kumari' etc.
+                    if ((p.programmeId || 'monthly') === currentProgId) {
+                        let centre = p.centre || 'Unknown';
+                        let cat = p.category; // 'bk' | 'nbk'
+                        let type = p.type; // 'guest' | 'sevadhari' | 'driver'
+                        let sub = p.subcategory; // 'Mata', 'Kumari' etc.
 
-                    if (!centreStats[centre]) {
-                        centreStats[centre] = {
-                            bk_guest: { total: 0, sub: {} },
-                            bk_sevadhari: { total: 0, sub: {} },
-                            nbk: { total: 0, sub: {} }
-                        };
+                        if (!centreStats[centre]) {
+                            centreStats[centre] = {
+                                bk_guest: { total: 0, sub: {} },
+                                bk_sevadhari: { total: 0, sub: {} },
+                                nbk: { total: 0, sub: {} }
+                            };
+                        }
+
+                        let section = 'bk_guest';
+                        if (cat === 'nbk') {
+                            section = 'nbk';
+                        } else if (type === 'sevadhari') {
+                            section = 'bk_sevadhari';
+                        }
+
+                        centreStats[centre][section].total++;
+                        centreStats[centre][section].sub[sub] = (centreStats[centre][section].sub[sub] || 0) + 1;
                     }
-
-                    let section = 'bk_guest';
-                    if (cat === 'nbk') {
-                        section = 'nbk';
-                    } else if (type === 'sevadhari') {
-                        section = 'bk_sevadhari';
-                    }
-
-                    centreStats[centre][section].total++;
-                    centreStats[centre][section].sub[sub] = (centreStats[centre][section].sub[sub] || 0) + 1;
                 });
             });
         }
@@ -2779,6 +3097,102 @@ document.addEventListener('DOMContentLoaded', () => {
                 centreListContainer.appendChild(block);
             });
         }
+
+        // Set receipt mode classes and toggle visibility of elements
+        state.showingReportIsReceipt = isReceipt;
+        
+        const titleEl = document.querySelector('#screen-report .app-header .app-title');
+        const centreEl = document.getElementById('report-big-centre');
+        const arrivalEl = document.getElementById('report-big-arrival');
+        const contactEl = document.getElementById('report-big-contact');
+        const statsSection = document.getElementById('report-stats-section');
+        const allotmentsSection = document.getElementById('report-allotments-section');
+        const centreSection = document.getElementById('report-centre-wise-section');
+
+        if (isReceipt) {
+            if (titleEl) titleEl.textContent = 'Your Allotment Receipt';
+            if (centreEl) {
+                centreEl.textContent = centre;
+                centreEl.classList.remove('hidden');
+                centreEl.style.display = '';
+            }
+            if (arrivalEl) {
+                arrivalEl.innerHTML = `🕒 Arrival: <strong>${arrivalTime}</strong>`;
+                arrivalEl.classList.remove('hidden');
+                arrivalEl.style.display = '';
+            }
+            
+            // Get contact phone
+            let phoneNum = '';
+            if (isPast && pastProg) {
+                const snap = pastProg.roomsSnapshot || {};
+                Object.values(snap).forEach(occList => {
+                    occList.forEach(p => {
+                        if (p.phone) phoneNum = p.phone;
+                    });
+                });
+            } else {
+                phoneNum = state.registration.centrePhone || '';
+                if (!phoneNum && state.registration.individuals && state.registration.individuals.length > 0) {
+                    phoneNum = state.registration.individuals[0].phone || '';
+                }
+            }
+            
+            if (contactEl) {
+                if (phoneNum) {
+                    contactEl.innerHTML = `📞 Contact: <strong>${phoneNum}</strong>`;
+                    contactEl.classList.remove('hidden');
+                    contactEl.style.display = '';
+                } else {
+                    contactEl.classList.add('hidden');
+                    contactEl.style.display = 'none';
+                }
+            }
+
+            if (statsSection) {
+                statsSection.classList.add('hidden');
+                statsSection.style.display = 'none';
+            }
+            if (allotmentsSection) {
+                allotmentsSection.classList.remove('hidden');
+                allotmentsSection.style.display = '';
+            }
+            if (centreSection) {
+                centreSection.classList.add('hidden');
+                centreSection.style.display = 'none';
+            }
+            
+            document.body.classList.add('receipt-mode');
+        } else {
+            if (titleEl) titleEl.textContent = 'Allotment Report';
+            if (centreEl) {
+                centreEl.classList.add('hidden');
+                centreEl.style.display = 'none';
+            }
+            if (arrivalEl) {
+                arrivalEl.classList.add('hidden');
+                arrivalEl.style.display = 'none';
+            }
+            if (contactEl) {
+                contactEl.classList.add('hidden');
+                contactEl.style.display = 'none';
+            }
+
+            if (statsSection) {
+                statsSection.classList.remove('hidden');
+                statsSection.style.display = '';
+            }
+            if (allotmentsSection) {
+                allotmentsSection.classList.add('hidden');
+                allotmentsSection.style.display = 'none';
+            }
+            if (centreSection) {
+                centreSection.classList.remove('hidden');
+                centreSection.style.display = '';
+            }
+            
+            document.body.classList.remove('receipt-mode');
+        }
     }
 
     // Trigger Native Window Print
@@ -2788,59 +3202,187 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // WhatsApp Share button
     document.getElementById('btn-whatsapp-share').addEventListener('click', () => {
-        const progName = state.selectedProgramme ? state.selectedProgramme.name : '-';
-        const centre = state.registration.centreName || '-';
-        const date = new Date().toLocaleDateString('en-IN');
+        const isPast = state.showingReportIsPast;
+        const pastProg = state.showingReportPastProg;
+        const isReceipt = state.showingReportIsReceipt;
 
-        let text = `*ACCOMMODATION ALLOTMENT REPORT*\n`;
-        text += `*Programme:* ${progName}\n`;
-        text += `*Centre:* ${centre}\n`;
-        text += `*Date:* ${date}\n\n`;
-        text += `*Room Allotments:*\n`;
+        let progName = '';
+        let centre = '';
+        let date = '';
+        let arrivalTime = '';
+        let allocatedArray = [];
+        let sevaAllocations = {};
 
-        let grouped = {};
-        state.allotment.allottedLog.forEach(log => {
-            if (!grouped[log.category]) grouped[log.category] = {};
-            grouped[log.category][log.room] = (grouped[log.category][log.room] || 0) + log.count;
-        });
-
-        Object.keys(grouped).forEach(cat => {
-            Object.keys(grouped[cat]).forEach(room => {
-                const count = grouped[cat][room];
-                text += `• ${cat}(${count}) = Room ${room}\n`;
+        if (isPast && pastProg) {
+            progName = pastProg.name;
+            centre = pastProg.centreName || '-';
+            date = pastProg.finishDate || '-';
+            arrivalTime = pastProg.arrivalTime || '-';
+            const snapshot = pastProg.roomsSnapshot || {};
+            Object.keys(snapshot).forEach(roomNum => {
+                const occupants = snapshot[roomNum] || [];
+                occupants.forEach(p => {
+                    allocatedArray.push({ ...p, roomNum: roomNum });
+                });
             });
-        });
-
-        // Add Seva info if present
-        const reg = state.registration;
-        const sevaAllocations = reg.sevaAllocations;
-        if (reg.category === 'bk' && reg.type === 'sevadhari' && Object.keys(sevaAllocations).length > 0) {
-            text += `\n*Ruhani Seva Duties:*\n`;
-            let namesMap = {};
-            if (reg.mode === 'group') {
-                const categories = ['mata', 'kumari', 'children', 'adhar_kumar', 'kumar'];
-                const labels = { mata: 'Mata', kumari: 'Kumari', children: 'Children', adhar_kumar: 'Adhar Kumar', kumar: 'Kumar' };
-                categories.forEach(cat => {
-                    const count = reg.counts[cat];
-                    for (let i = 1; i <= count; i++) {
-                        namesMap[`grp_${cat}_${i}`] = `${labels[cat]} #${i}`;
+            sevaAllocations = pastProg.sevaAllocations || {};
+        } else {
+            progName = state.selectedProgramme ? state.selectedProgramme.name : '-';
+            const currentProgId = state.selectedProgramme ? state.selectedProgramme.id : 'monthly';
+            Object.keys(state.rooms).forEach(roomNum => {
+                const occupants = state.rooms[roomNum].allocated || [];
+                occupants.forEach(p => {
+                    if ((p.programmeId || 'monthly') === currentProgId) {
+                        allocatedArray.push({ ...p, roomNum: roomNum });
                     }
                 });
+            });
+            if (allocatedArray.length > 0) {
+                centre = allocatedArray[0].centre || '-';
+                arrivalTime = allocatedArray[0].arrivalTime || '-';
             } else {
-                reg.individuals.forEach(p => {
-                    namesMap[p.id] = p.name;
-                });
+                centre = state.registration.centreName || '-';
+                arrivalTime = state.registration.arrivalTime || '-';
             }
-
-            Object.keys(sevaAllocations).forEach(id => {
-                text += `• ${namesMap[id] || 'Sevadhari'}: ${sevaAllocations[id]}\n`;
+            date = new Date().toLocaleDateString('en-IN');
+            
+            // Build sevaAllocations dynamically from room occupants of this programme!
+            sevaAllocations = {};
+            allocatedArray.forEach(p => {
+                if (p.type === 'sevadhari' && p.duty) {
+                    sevaAllocations[p.id] = p.duty;
+                }
             });
         }
 
+        // Send via WhatsApp API to the registered contact phone number if present
+        let phoneNum = '';
+        if (isPast && pastProg) {
+            const snap = pastProg.roomsSnapshot || {};
+            Object.values(snap).forEach(occList => {
+                occList.forEach(p => {
+                    if (p.phone) phoneNum = p.phone;
+                });
+            });
+        } else {
+            phoneNum = state.registration.centrePhone || '';
+            if (!phoneNum && state.registration.individuals && state.registration.individuals.length > 0) {
+                phoneNum = state.registration.individuals[0].phone || '';
+            }
+        }
+
+        let text = '';
+        if (isReceipt) {
+            text += `*YOUR ALLOTMENT RECEIPT*\n`;
+            text += `━━━━━━━━━━━━━━━━━━━━━\n`;
+            text += `*Centre:* ${centre}\n`;
+            text += `*Arrival:* ${arrivalTime}\n`;
+            if (phoneNum) {
+                text += `*Contact:* ${phoneNum}\n`;
+            }
+            text += `━━━━━━━━━━━━━━━━━━━━━\n`;
+            text += `*Room Allotments:*\n`;
+
+            // Group allotments by category from allottedLog
+            let grouped = {};
+            let logsToUse = [];
+            if (isPast && pastProg) {
+                logsToUse = pastProg.allottedLog || [];
+            } else {
+                logsToUse = state.allotment.allottedLog || [];
+            }
+            
+            logsToUse.forEach(log => {
+                if (!grouped[log.category]) grouped[log.category] = {};
+                grouped[log.category][log.room] = (grouped[log.category][log.room] || 0) + log.count;
+            });
+
+            Object.keys(grouped).forEach(cat => {
+                Object.keys(grouped[cat]).forEach(room => {
+                    const count = grouped[cat][room];
+                    text += `• *${cat} (${count})* = Room No. ${room}\n`;
+                });
+            });
+            text += `━━━━━━━━━━━━━━━━━━━━━\n`;
+        } else {
+            // Programme report format
+            text += `*ACCOMMODATION ALLOTMENT REPORT*\n`;
+            text += `*Programme:* ${progName}\n`;
+            text += `*Date:* ${date}\n\n`;
+
+            // Compute counts
+            let guestCount = 0;
+            let sevaCount = 0;
+            let nbkCount = 0;
+            allocatedArray.forEach(p => {
+                const cat = p.category;
+                const type = p.type;
+                if (cat === 'bk') {
+                    if (type === 'guest') guestCount++;
+                    else if (type === 'sevadhari') sevaCount++;
+                } else {
+                    nbkCount++;
+                    if (type === 'driver') guestCount++;
+                }
+            });
+            const totalCount = guestCount + sevaCount + nbkCount;
+
+            text += `*Occupants Summary:*\n`;
+            text += `• Total: ${totalCount}\n`;
+            text += `• Guest: ${guestCount}\n`;
+            text += `• Seva: ${sevaCount}\n`;
+            text += `• Non-BK: ${nbkCount}\n\n`;
+
+            // Group and list centre summary
+            text += `*Centre-Wise Summary:*\n`;
+            let centreStats = {};
+            allocatedArray.forEach(p => {
+                let c = p.centre || 'Unknown';
+                let cat = p.category;
+                let type = p.type;
+                let sub = p.subcategory;
+
+                if (!centreStats[c]) {
+                    centreStats[c] = {
+                        bk_guest: { total: 0, sub: {} },
+                        bk_sevadhari: { total: 0, sub: {} },
+                        nbk: { total: 0, sub: {} }
+                    };
+                }
+
+                let section = 'bk_guest';
+                if (cat === 'nbk') {
+                    section = 'nbk';
+                } else if (type === 'sevadhari') {
+                    section = 'bk_sevadhari';
+                }
+
+                centreStats[c][section].total++;
+                centreStats[c][section].sub[sub] = (centreStats[c][section].sub[sub] || 0) + 1;
+            });
+
+            Object.keys(centreStats).forEach(c => {
+                text += `• *${c}*:\n`;
+                const data = centreStats[c];
+                if (data.bk_guest.total > 0) {
+                    let subDetails = [];
+                    Object.keys(data.bk_guest.sub).forEach(s => subDetails.push(`${s}: ${data.bk_guest.sub[s]}`));
+                    text += `  - BK Guests (${data.bk_guest.total}): ${subDetails.join(', ')}\n`;
+                }
+                if (data.bk_sevadhari.total > 0) {
+                    let subDetails = [];
+                    Object.keys(data.bk_sevadhari.sub).forEach(s => subDetails.push(`${s}: ${data.bk_sevadhari.sub[s]}`));
+                    text += `  - BK Sevadharis (${data.bk_sevadhari.total}): ${subDetails.join(', ')}\n`;
+                }
+                if (data.nbk.total > 0) {
+                    let subDetails = [];
+                    Object.keys(data.nbk.sub).forEach(s => subDetails.push(`${s}: ${data.nbk.sub[s]}`));
+                    text += `  - Non-BK (${data.nbk.total}): ${subDetails.join(', ')}\n`;
+                }
+            });
+        }
         text += `\n_Generated via Accommodation SRC App_`;
 
-        // Send via WhatsApp API to the registered contact phone number if present
-        const phoneNum = state.registration.centrePhone || '';
         let cleanedPhone = phoneNum.replace(/\D/g, '');
         if (cleanedPhone.length === 10) {
             cleanedPhone = '91' + cleanedPhone;
@@ -3164,7 +3706,7 @@ document.addEventListener('DOMContentLoaded', () => {
             room.allocated.forEach(p => {
                 if (p.type !== 'sevadhari') return;
                 
-                const duty = state.registration.sevaAllocations[p.id];
+                const duty = p.duty || state.registration.sevaAllocations[p.id] || null;
                 const centreName = p.centre || 'Unknown';
                 
                 if (!duty) {
@@ -3206,7 +3748,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 box.innerHTML = html;
                 box.addEventListener('click', () => {
-                    // Navigate to Ruhani Seva page
+                    // Populate state.registration with unallocated sevadharis of this centre
+                    resetRegistrationForm();
+                    state.registration.centreName = centre;
+                    state.registration.mode = 'individual';
+                    state.registration.category = 'bk';
+                    state.registration.type = 'sevadhari';
+                    state.allotment.cameFromSevadhariDetails = true;
+                    
+                    unallocatedMap[centre].forEach(item => {
+                        const p = item.occupant;
+                        const nameDisp = getOccupantDisplayName(p);
+                        state.registration.individuals.push({
+                            id: p.id,
+                            name: nameDisp,
+                            type: p.subcategory,
+                            phone: p.phone || ''
+                        });
+                    });
+                    
+                    renderSevaPersonsList();
                     navigateTo('screen-seva');
                 });
                 unallocatedContainer.appendChild(box);
@@ -3265,7 +3826,7 @@ document.addEventListener('DOMContentLoaded', () => {
         Object.values(state.rooms).forEach(room => {
             room.allocated.forEach(p => {
                 if (p.type !== 'sevadhari') return;
-                const duty = state.registration.sevaAllocations[p.id];
+                const duty = p.duty || state.registration.sevaAllocations[p.id] || null;
                 if (duty) {
                     deptCounts[duty] = (deptCounts[duty] || 0) + 1;
                 }
@@ -3321,7 +3882,7 @@ document.addEventListener('DOMContentLoaded', () => {
         Object.values(state.rooms).forEach(room => {
             room.allocated.forEach(p => {
                 if (p.type !== 'sevadhari') return;
-                const duty = state.registration.sevaAllocations[p.id];
+                const duty = p.duty || state.registration.sevaAllocations[p.id] || null;
                 if (duty === deptName) {
                     listItems.push({ occupant: p, roomNum: room.number });
                 }

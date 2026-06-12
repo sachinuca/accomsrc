@@ -604,9 +604,11 @@
                 <div class="screen-body" style="padding-bottom: 100px;">
                     <div class="report-container-card" id="printable-report-card">
                         <div class="report-header" style="text-align: center;">
-                            <h2 style="font-size: 24px; font-weight: 800; color: #1e1b4b; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; font-family: 'Outfit', sans-serif;">Sonipat Retreat Centre, Nangal Khurd</h2>
+                            <img src="logo.png" alt="Shiv Baba Logo" style="height: 48px; width: 48px; object-fit: contain; margin-bottom: 6px;">
+                            <h2 style="font-size: 24px; font-weight: 800; color: #1e1b4b; margin: 0 0 6px 0; text-transform: uppercase; letter-spacing: 0.5px; font-family: 'Outfit', sans-serif;">Sonepat Retreat Centre</h2>
                             <div id="report-big-centre" style="font-size: 32px; font-weight: 900; background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 10px 0; line-height: 1.2;">-</div>
                             <div id="report-big-arrival" style="font-size: 18px; font-weight: 800; color: #4f46e5; background: rgba(79, 70, 229, 0.08); padding: 10px 20px; border-radius: 12px; display: inline-block; margin: 8px 0; border: 1px solid rgba(79, 70, 229, 0.15); font-family: 'Outfit', sans-serif;">🕒 Arrival: -</div>
+                            <div id="report-big-contact" style="font-size: 18px; font-weight: 800; color: #0d9488; background: rgba(13, 148, 136, 0.08); padding: 10px 20px; border-radius: 12px; display: inline-block; margin: 8px 0; border: 1px solid rgba(13, 148, 136, 0.15); font-family: 'Outfit', sans-serif; margin-left: 8px;">📞 Contact: -</div>
                             <p class="report-meta" style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">Programme: <span id="report-prog-name">-</span> | Date: <span id="report-date">-</span></p>
                         </div>
                         
@@ -614,7 +616,7 @@
 
                         <!-- Report stats summary (clickable) -->
                         <div class="report-stats-section" id="report-stats-section" style="margin-bottom: 20px;">
-                            <h3 style="font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2.5px solid #cbd5e1; padding-bottom: 4px; margin-bottom: 12px;">Occupant Summary</h3>
+                            <h3 style="font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2.5px solid #cbd5e1; padding-bottom: 4px; margin-bottom: 12px;">This Programme Occupants Summary</h3>
                             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px;">
                                 <div class="stat-item clickable-report-stat" id="btn-report-stat-total" style="background: rgba(15, 23, 42, 0.03); border: 1px solid rgba(15, 23, 42, 0.08); border-radius: 12px; padding: 10px; text-align: center; cursor: pointer;">
                                     <div style="font-size: 20px; font-weight: 800; color: #1e1b4b;" id="report-stat-total-people">0</div>
@@ -638,16 +640,16 @@
                         </div>
 
                         <!-- Report Summary Lists -->
-                        <div class="report-details-section">
+                        <div class="report-details-section" id="report-allotments-section">
                             <h3 style="font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2.5px solid #cbd5e1; padding-bottom: 4px; margin-bottom: 12px;">Room Allotments</h3>
                             <div class="report-table" id="report-room-allotments-list">
                                 <!-- Pre-formatted reports, e.g. Mata(5) = 301 -->
                             </div>
                         </div>
 
-                        <!-- Hide Centre-Wise Summary completely -->
-                        <div class="report-details-section hidden">
-                            <h3>Centre-Wise Summary</h3>
+                        <!-- Centre-Wise Summary -->
+                        <div class="report-details-section" id="report-centre-wise-section">
+                            <h3 style="font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2.5px solid #cbd5e1; padding-bottom: 4px; margin-bottom: 12px;">Centre-Wise Summary</h3>
                             <div class="report-table-vertical" id="report-centre-summary-list">
                                 <!-- Centre summary breakdown -->
                             </div>
