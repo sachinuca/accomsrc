@@ -94,6 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const geyserRooms = ['203', '207', '214', '216', '217', '218', '306', '319', '220', '404', '219'];
         const pantryRooms = ['208', '304'];
         const niwasiRooms = ['201', '202', '205', '206', '209', '210', '211', '212', '302', '305', '308', '309', '310', '311'];
+        const sittingRooms = ['217', '317'];
 
         floors.forEach(floor => {
             // Block A rooms
@@ -134,7 +135,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     geyser: geyserRooms.includes(roomNum),
                     vip: roomNum === '219',
                     pantry: pantryRooms.includes(roomNum),
-                    niwasi: niwasiRooms.includes(roomNum)
+                    niwasi: niwasiRooms.includes(roomNum),
+                    sitting: sittingRooms.includes(roomNum)
                 };
             };
 
@@ -312,6 +314,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderProgrammes();
         renderPastProgrammes();
         updateDashboardStats();
+        updateRoomVisualizationStats();
 
         // Refresh dynamic components depending on the active screen
         if (state.activeScreen === 'screen-room-viz') {
@@ -365,6 +368,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderProgrammes();
     renderPastProgrammes();
     updateDashboardStats();
+    updateRoomVisualizationStats();
 
     // Past Programmes Toggle
     const pastToggle = document.getElementById('past-programmes-toggle');
@@ -1210,6 +1214,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 roomEl.classList.add('status-pantry');
             } else if (room.niwasi) {
                 roomEl.classList.add('status-niwasi');
+            } else if (room.sitting) {
+                roomEl.classList.add('status-sitting');
             } else if (room.gender === 'female') {
                 roomEl.classList.add('gender-female');
             } else if (room.gender === 'male') {
@@ -1233,13 +1239,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 fullBadgeHtml = `<span class="room-full-badge" style="background:#475569;">Pantry</span>`;
             } else if (room.niwasi) {
                 fullBadgeHtml = `<span class="room-full-badge" style="background:#64748b;">Src Niwasi</span>`;
+            } else if (room.sitting) {
+                fullBadgeHtml = `<span class="room-full-badge" style="background:#6d28d9;">Sitting</span>`;
             } else if (room.occupied >= room.capacity) {
                 fullBadgeHtml = `<span class="room-full-badge">Full</span>`;
             } else if (room.unmaintained) {
                 fullBadgeHtml = `<span class="room-full-badge" style="background:#ef4444;">Issue</span>`;
             }
 
-            let occupancyText = room.pantry ? 'Pantry Room' : (room.niwasi ? 'Src Niwasi' : `${room.occupied}/${room.capacity} beds`);
+            let occupancyText = room.sitting ? 'Sitting Room' : (room.pantry ? 'Pantry Room' : (room.niwasi ? 'Src Niwasi' : `${room.occupied}/${room.capacity} beds`));
             let geyserBadgeHtml = room.geyser ? `<span class="room-geyser-badge">Geyser <svg viewBox="0 0 24 24" width="8" height="8" style="vertical-align: middle; fill: currentColor; margin-left: 2px;"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg></span>` : '';
 
             let categoryBadgeHtml = '';
@@ -1624,7 +1632,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // If marked unmaintained but occupied beds exist, alert user
         const room = state.rooms[selectedMaintRoom];
         if (isUnmaintained && room.occupied > 0) {
-            if (!confirm('This room currently has occupied beds. Marking it unmaintained will force color to red. Proceed?')) {
+            if (!confirm('This room currently has occupied beds. Marking it unmaintained will delete all occupants and empty the room. Proceed?')) {
                 return;
             }
         }
@@ -1632,14 +1640,17 @@ document.addEventListener('DOMContentLoaded', () => {
         room.unmaintained = isUnmaintained;
         room.maintenanceIssue = isUnmaintained ? issue : '';
 
-        // Reset gender if unmaintained and empty
-        if (isUnmaintained && room.occupied === 0) {
+        // Reset gender and empty room if unmaintained
+        if (isUnmaintained) {
+            room.allocated = [];
+            room.occupied = 0;
             room.gender = null;
         }
 
         document.getElementById('modal-maintenance').classList.remove('active');
         renderRoomMap('viz');
         updateDashboardStats();
+        saveState();
     });
 
     // Action chooser trigger routing
@@ -1676,6 +1687,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('btn-back-from-room-map').addEventListener('click', () => {
         navigateTo('screen-home');
+    });
+
+    document.getElementById('btn-refresh-room-viz').addEventListener('click', () => {
+        const btnRefresh = document.getElementById('btn-refresh-room-viz');
+        if (btnRefresh) {
+            btnRefresh.classList.add('loading');
+            btnRefresh.disabled = true;
+        }
+
+        if (isFirebaseActive && dbRef) {
+            dbRef.once('value').then((snapshot) => {
+                const remoteData = snapshot.val();
+                if (remoteData) {
+                    applyStateUpdate(remoteData);
+                    try {
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify(remoteData));
+                    } catch (e) {}
+                    refreshUI();
+                    showToast('Room visualization refreshed from database!');
+                } else {
+                    showToast('No remote data found.');
+                }
+            }).catch(err => {
+                console.error('Manual sync failed:', err);
+                showToast('Sync failed. Please check network.');
+            }).finally(() => {
+                if (btnRefresh) {
+                    btnRefresh.classList.remove('loading');
+                    btnRefresh.disabled = false;
+                }
+            });
+        } else {
+            // Local fallback
+            loadState();
+            refreshUI();
+            showToast('Room visualization refreshed from local storage!');
+            if (btnRefresh) {
+                btnRefresh.classList.remove('loading');
+                btnRefresh.disabled = false;
+            }
+        }
     });
 
     // ----------------------------------------------------
@@ -2215,7 +2267,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Helper to check room compatibility
         function isRoomCompatible(room) {
-            if (room.unmaintained || room.pantry || room.niwasi) return false;
+            if (room.unmaintained || room.pantry || room.niwasi || room.sitting) return false;
             if (isFemale && room.gender && room.gender !== 'female') return false;
             if (isMale && room.gender && room.gender !== 'male') return false;
             return true;
@@ -2397,6 +2449,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // Validation: Cannot place in a Src Niwasi room
         if (room.niwasi) {
             alert('Src Niwasi room cannot be allotted for accommodation.');
+            return;
+        }
+
+        // Validation: Cannot place in a Sitting room
+        if (room.sitting) {
+            alert('Sitting room cannot be allotted for accommodation.');
             return;
         }
 
@@ -4200,6 +4258,48 @@ document.addEventListener('DOMContentLoaded', () => {
                 eyeClosed.style.display = isPassword ? 'block' : 'none';
             }
         });
+    }
+
+    function updateRoomVisualizationStats() {
+        let totalRooms = 0;
+        let occupiedRooms = 0;
+        let totalBeds = 0;
+        let occupiedBeds = 0;
+
+        Object.values(state.rooms).forEach(room => {
+            totalRooms++;
+            if (room.occupied > 0) {
+                occupiedRooms++;
+            }
+            occupiedBeds += room.occupied;
+            if (!room.pantry && !room.niwasi && !room.sitting) {
+                totalBeds += room.capacity;
+            }
+        });
+
+        const elTotalRooms = document.getElementById('viz-stat-total-rooms');
+        const elOccupiedRooms = document.getElementById('viz-stat-occupied-rooms');
+        const elTotalBeds = document.getElementById('viz-stat-total-beds');
+        const elOccupiedBeds = document.getElementById('viz-stat-occupied-beds');
+
+        if (elTotalRooms) elTotalRooms.textContent = totalRooms;
+        if (elOccupiedRooms) elOccupiedRooms.textContent = occupiedRooms;
+        if (elTotalBeds) elTotalBeds.textContent = totalBeds;
+        if (elOccupiedBeds) elOccupiedBeds.textContent = occupiedBeds;
+    }
+
+    function showToast(message) {
+        let toast = document.getElementById('app-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'app-toast';
+            document.body.appendChild(toast);
+        }
+        toast.textContent = message;
+        toast.className = 'app-toast show';
+        setTimeout(() => {
+            toast.className = 'app-toast';
+        }, 3000);
     }
 
     // Run role enforcement on startup
